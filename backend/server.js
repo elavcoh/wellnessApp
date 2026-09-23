@@ -1,3 +1,12 @@
+/**
+ * server.js
+ *
+ * Purpose: Starts the local Express server. This is the only place the
+ * OpenAI API key is loaded (from .env) - the mobile app never sees it.
+ * Related to: called by "npm run start" in the backend/ folder. Mounts the
+ * routes defined in routes/.
+ */
+
 require('dotenv').config();
 
 const express = require('express');

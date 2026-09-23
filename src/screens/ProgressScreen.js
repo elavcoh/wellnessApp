@@ -2,6 +2,15 @@ import { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
+/**
+ * ProgressScreen.js
+ *
+ * Purpose: Shows simple 7-day trends for steps, meals, workouts and
+ * breathing, built entirely from existing SQLite data (read-only - this
+ * screen never writes anything).
+ * Related to: one of the 6 main tabs.
+ */
+
 import BarRow from '../components/BarRow';
 import { getRecentSteps } from '../database/repositories/stepsRepository';
 import { getMealCountsByDate } from '../database/repositories/mealsRepository';
@@ -18,7 +27,13 @@ export default function ProgressScreen() {
   const [breathingSeries, setBreathingSeries] = useState([]);
   const [loaded, setLoaded] = useState(false);
 
+  // Builds the last 7 days of data for each chart. Missing step days are
+  // kept as null (no data), not 0, so the chart doesn't invent activity
+  // that was never measured.
   const loadProgress = useCallback(async () => {
+    // The fixed list of the last 7 calendar dates, e.g.
+    // ["2026-09-17", ..., "2026-09-23"] - this is the x-axis every chart
+    // below is built around, regardless of which days actually have data.
     const dates = getLastNDateStrings(DAYS);
 
     const [stepsRows, mealRows, workoutRows, breathingRows] = await Promise.all([
@@ -28,6 +43,10 @@ export default function ProgressScreen() {
       getBreathingCountsByDate(DAYS),
     ]);
 
+    // Each repository returns only the rows that exist (e.g. just 3 rows if
+    // steps were only recorded on 3 of the last 7 days). Turning each list
+    // into a {date: value} lookup object makes it easy to ask "what was the
+    // value on this specific date, if any?" in the .map() calls below.
     const stepsByDate = Object.fromEntries(stepsRows.map((row) => [row.date, row.step_count]));
     const mealsByDate = Object.fromEntries(mealRows.map((row) => [row.date, row.count]));
     const workoutsByDate = Object.fromEntries(workoutRows.map((row) => [row.date, row]));
@@ -72,10 +91,16 @@ export default function ProgressScreen() {
     }, [loadProgress])
   );
 
+  // --- Summary numbers shown above each chart, all derived from the series above ---
+  // Average only counts days that actually have a step reading - a day
+  // with no data (null) is excluded rather than treated as a 0, so it
+  // can't drag the average down for a day that was never measured.
   const daysWithSteps = stepsSeries.filter((day) => day.steps !== null);
   const averageSteps = daysWithSteps.length
     ? Math.round(daysWithSteps.reduce((sum, day) => sum + day.steps, 0) / daysWithSteps.length)
     : null;
+  // maxSteps sets the "full bar" reference for BarRow - at least 1, so we
+  // never divide by zero if every day so far has 0 steps.
   const maxSteps = Math.max(1, ...daysWithSteps.map((day) => day.steps));
 
   const totalMeals = mealsSeries.reduce((sum, day) => sum + day.count, 0);

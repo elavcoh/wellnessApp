@@ -1,5 +1,17 @@
+/**
+ * schema.js
+ *
+ * Purpose: Creates all local SQLite tables the first time the app runs,
+ * and adds new columns to existing tables when the app is updated (see
+ * addColumnIfMissing below).
+ * Related to: called once at app startup, from RootNavigator.js. Every
+ * table created here is used by a matching file in database/repositories/.
+ */
+
 import { getDb } from './db';
 
+// Creates every table if it doesn't exist yet, and adds any new columns
+// that were introduced after the table was first created on this device.
 export async function initDatabase() {
   const db = await getDb();
   await db.execAsync(`
@@ -97,6 +109,16 @@ export async function initDatabase() {
 // Adds a column to an existing table if it isn't there yet. Needed because
 // CREATE TABLE IF NOT EXISTS only runs for brand-new tables, not ones that
 // already existed from an earlier version of the app.
+//
+// Example: when "estimated_calories" was added to the meals table, anyone
+// who already had the app installed still had an OLD meals table without
+// that column. Their CREATE TABLE IF NOT EXISTS does nothing (the table
+// already exists), so without this function the column would simply be
+// missing on their phone forever, causing errors wherever it's used.
+//
+// "PRAGMA table_info(x)" is a SQLite-specific command that returns the
+// list of columns a table currently has (name, type, etc.) - it's how we
+// check "does this column already exist?" before trying to add it.
 async function addColumnIfMissing(db, table, column, type) {
   const columns = await db.getAllAsync(`PRAGMA table_info(${table});`);
   const hasColumn = columns.some((c) => c.name === column);

@@ -1,7 +1,20 @@
+/**
+ * dateUtils.js
+ *
+ * Purpose: Small helper functions for dates and times used across the app
+ * (e.g. "today" as a string, formatting a list of recent days).
+ * Related to: used by many screens and repositories that need to know
+ * "today's date" or show the last few days.
+ */
+
+// Returns today's date as "YYYY-MM-DD". Note: this uses UTC, so right
+// after midnight it can briefly show yesterday's date in timezones ahead
+// of UTC. Known limitation, not fixed yet.
 export function getTodayDateString() {
   return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 }
 
+// Returns the current clock time as "HH:MM" (local device time).
 export function getCurrentTimeString() {
   const now = new Date();
   const hours = String(now.getHours()).padStart(2, '0');
@@ -21,6 +34,7 @@ export function getLastNDateStrings(n) {
   return dates;
 }
 
+// Turns "2026-09-15" into a short weekday name like "Tue", for chart labels.
 export function getWeekdayLabel(dateString) {
   return new Date(`${dateString}T00:00:00Z`).toLocaleDateString('en-US', {
     weekday: 'short',

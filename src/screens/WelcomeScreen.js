@@ -1,3 +1,11 @@
+/**
+ * WelcomeScreen.js
+ *
+ * Purpose: The very first screen a new user sees, shown only once before a
+ * profile exists. Leads into ProfileSetupScreen.js.
+ * Related to: shown by RootNavigator.js when no profile is saved yet.
+ */
+
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 export default function WelcomeScreen({ navigation }) {

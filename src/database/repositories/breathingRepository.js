@@ -1,3 +1,13 @@
+/**
+ * breathingRepository.js
+ *
+ * Purpose: Reads and writes completed breathing sessions in SQLite. A row
+ * is only ever created when a session finishes - canceling a session
+ * writes nothing.
+ * Related to: used by BreathingScreen.js, HomeScreen.js (breathing
+ * status), wellnessContextBuilder.js, and ProgressScreen.js.
+ */
+
 import { getDb } from '../db';
 
 // Only called when a session finishes naturally - canceling never writes a
@@ -12,6 +22,7 @@ export async function saveCompletedSession({ sessionType, level, durationSeconds
   );
 }
 
+// Returns all sessions completed since local midnight today.
 export async function getTodayCompletedSessions() {
   const db = await getDb();
   const startOfToday = new Date();
@@ -23,6 +34,8 @@ export async function getTodayCompletedSessions() {
   );
 }
 
+// Returns how many sessions were completed on each of the last N days.
+// Used by ProgressScreen.js to draw the "Breathing" chart.
 export async function getBreathingCountsByDate(days) {
   const db = await getDb();
   return db.getAllAsync(

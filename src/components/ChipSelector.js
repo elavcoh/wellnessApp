@@ -1,3 +1,11 @@
+/**
+ * ChipSelector.js
+ *
+ * Purpose: A row of tappable "chip" buttons for choosing one option from a
+ * short list (e.g. Goal, Activity Level, Sex).
+ * Related to: used by ProfileSetupScreen.js and NutritionScreen.js.
+ */
+
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 export default function ChipSelector({ label, options, selected, onSelect }) {

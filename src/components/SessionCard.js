@@ -1,3 +1,11 @@
+/**
+ * SessionCard.js
+ *
+ * Purpose: Shows one breathing session option (title, description,
+ * duration) that the user can tap to start.
+ * Related to: used by BreathingScreen.js.
+ */
+
 import { Pressable, StyleSheet, Text } from 'react-native';
 
 export default function SessionCard({ session, onPress }) {

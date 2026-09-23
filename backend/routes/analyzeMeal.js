@@ -1,8 +1,18 @@
+/**
+ * routes/analyzeMeal.js
+ *
+ * Purpose: Handles POST /api/analyze-meal - takes a base64 photo from the
+ * app and returns the AI's food/calorie/protein analysis.
+ * Related to: called by src/services/aiService.js on the phone.
+ */
+
 const express = require('express');
 const { analyzeMealImage } = require('../services/openaiClient');
 
 const router = express.Router();
 
+// Validates the request, forwards the image to OpenAI, and logs basic
+// (non-sensitive) debug info - never the image bytes or the API key.
 router.post('/', async (req, res) => {
   const { imageBase64, mimeType } = req.body;
 

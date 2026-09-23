@@ -1,3 +1,12 @@
+/**
+ * notificationService.js
+ *
+ * Purpose: Wraps expo-notifications - permission requests, and
+ * scheduling/canceling the three local reminders (meal, movement,
+ * evening summary). Local notifications only, no push/cloud.
+ * Related to: used by NotificationSettingsScreen.js and RootNavigator.js.
+ */
+
 import * as Notifications from 'expo-notifications';
 
 // Makes notifications show as a banner even while the app is open, not just
@@ -55,6 +64,7 @@ export async function requestNotificationPermission() {
   return result.granted;
 }
 
+// Schedules one reminder to repeat every day at a fixed time.
 async function scheduleDaily(key) {
   const { title, body, hour, minute } = REMINDERS[key];
   const identifier = IDENTIFIERS[key];
@@ -100,6 +110,7 @@ export async function syncScheduledNotifications(settings) {
   }
 }
 
+// Sends one test notification, used by the "Send test notification" button.
 export async function sendTestNotificationIn5Seconds() {
   await Notifications.scheduleNotificationAsync({
     content: {

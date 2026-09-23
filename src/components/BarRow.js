@@ -1,3 +1,12 @@
+/**
+ * BarRow.js
+ *
+ * Purpose: One row in a simple bar chart - a label, a fill bar sized
+ * relative to the highest value in the chart, and a value. Used instead
+ * of a charting library.
+ * Related to: used by ProgressScreen.js (steps, meals, breathing charts).
+ */
+
 import { StyleSheet, Text, View } from 'react-native';
 
 export default function BarRow({ label, value, maxValue, valueLabel, noData }) {

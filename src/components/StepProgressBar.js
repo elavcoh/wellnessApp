@@ -1,3 +1,11 @@
+/**
+ * StepProgressBar.js
+ *
+ * Purpose: A simple horizontal fill bar showing progress toward a goal
+ * (e.g. steps taken vs. step goal), as a value from 0 to 1.
+ * Related to: used by MovementScreen.js.
+ */
+
 import { StyleSheet, View } from 'react-native';
 
 export default function StepProgressBar({ progress }) {

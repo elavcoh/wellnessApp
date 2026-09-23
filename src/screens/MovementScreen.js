@@ -2,6 +2,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
+/**
+ * MovementScreen.js
+ *
+ * Purpose: Shows today's step count and history from the Pedometer, and
+ * lets the user generate a workout template and check off exercises.
+ * Related to: one of the 6 main tabs. Uses stepService.js for the sensor
+ * and workoutTemplates.js for the fixed workout plans.
+ */
+
 import StepProgressBar from '../components/StepProgressBar';
 import ExerciseItem from '../components/ExerciseItem';
 import { getTodayStepCount } from '../services/stepService';
@@ -17,15 +26,23 @@ import { selectWorkoutTemplate } from '../constants/workoutTemplates';
 import { getTodayDateString } from '../utils/dateUtils';
 
 export default function MovementScreen() {
-  // loading | ok | unsupported | denied
+  // status covers the Pedometer part of the screen only (the workout part
+  // below always renders regardless of step status):
+  //   loading     - checking Pedometer availability/permission right now
+  //   ok          - steps are working, show the steps card + history
+  //   unsupported - this device has no step-counting hardware (e.g. Simulator)
+  //   denied      - user has not granted Motion & Fitness permission
   const [status, setStatus] = useState('loading');
   const [todaySteps, setTodaySteps] = useState(0);
-  const [stepGoal, setStepGoal] = useState(null);
-  const [recentHistory, setRecentHistory] = useState([]);
+  const [stepGoal, setStepGoal] = useState(null); // from the profile, or null if not set
+  const [recentHistory, setRecentHistory] = useState([]); // last 7 days of saved step counts
 
-  const [profile, setProfile] = useState(null);
-  const [workout, setWorkout] = useState(null);
+  const [profile, setProfile] = useState(null); // needed for step goal + workout template choice
+  const [workout, setWorkout] = useState(null); // today's workout, or null if none generated yet
 
+  // Reads today's steps from the Pedometer and saves them to SQLite. Runs
+  // whenever the screen is opened or the app comes back to the foreground -
+  // iOS does not let us reliably wake up in the background to do this.
   const refreshSteps = useCallback(async () => {
     const profileRow = await getProfile();
     setProfile(profileRow);
@@ -57,11 +74,13 @@ export default function MovementScreen() {
     setRecentHistory(history);
   }, []);
 
+  // Reads today's workout from SQLite (or null if none exists yet).
   const loadWorkout = useCallback(async () => {
     const todaysWorkout = await getWorkoutForDate(getTodayDateString());
     setWorkout(todaysWorkout);
   }, []);
 
+  // Refresh both steps and the workout every time this tab is opened.
   useFocusEffect(
     useCallback(() => {
       refreshSteps();
@@ -69,6 +88,9 @@ export default function MovementScreen() {
     }, [refreshSteps, loadWorkout])
   );
 
+  // Also refresh whenever the whole app comes back to the foreground (e.g.
+  // user was on the lock screen or another app) - this is the "best we can
+  // do" replacement for background step polling, which iOS doesn't allow.
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextAppState) => {
       if (nextAppState === 'active') {
@@ -76,9 +98,10 @@ export default function MovementScreen() {
         loadWorkout();
       }
     });
-    return () => subscription.remove();
+    return () => subscription.remove(); // stop listening when the screen unmounts
   }, [refreshSteps, loadWorkout]);
 
+  // Picks a fixed workout template (no AI) based on the user's profile.
   async function handleGenerateWorkout() {
     const template = selectWorkoutTemplate(profile);
     const exercises = template.exercises.map((exercise) => ({ ...exercise, completed: false }));
@@ -92,6 +115,10 @@ export default function MovementScreen() {
     setWorkout(created);
   }
 
+  // Flips one exercise's completed flag on/off, saves the whole updated
+  // list (SQLite stores it as one JSON blob, not individual rows), then
+  // re-reads the workout so its derived status (see workoutsRepository.js)
+  // is up to date.
   async function handleToggleExercise(index) {
     const updatedExercises = workout.exercises.map((exercise, i) =>
       i === index ? { ...exercise, completed: !exercise.completed } : exercise
@@ -100,11 +127,14 @@ export default function MovementScreen() {
     loadWorkout();
   }
 
+  // The "Mark Workout Complete" button - marks every exercise done at once,
+  // even ones the user never individually checked.
   async function handleCompleteWorkout() {
     await completeWorkout(workout.id, workout.exercises);
     loadWorkout();
   }
 
+  // 0 to 1 (or more, if the user exceeded their goal) for the progress bar.
   const progress = stepGoal ? todaySteps / stepGoal : 0;
 
   return (
@@ -160,6 +190,9 @@ export default function MovementScreen() {
         </>
       )}
 
+      {/* Two mutually-exclusive states: no workout yet (offer to generate
+          one) or an existing workout (show it and let it be checked off).
+          A workout is never regenerated once it exists for today. */}
       <Text style={[styles.sectionTitle, styles.workoutsSectionTitle]}>Workouts</Text>
 
       {!workout && (

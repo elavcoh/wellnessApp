@@ -1,3 +1,11 @@
+/**
+ * routes/wellnessAdvice.js
+ *
+ * Purpose: Handles POST /api/wellness-advice - takes a question and the
+ * app's wellness context, and returns the AI Coach's structured answer.
+ * Related to: called by src/services/aiService.js on the phone.
+ */
+
 const express = require('express');
 const { getWellnessAdvice } = require('../services/openaiClient');
 

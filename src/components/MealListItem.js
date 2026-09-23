@@ -1,3 +1,11 @@
+/**
+ * MealListItem.js
+ *
+ * Purpose: Shows one saved meal in the "Today's Meals" list (photo, type,
+ * description, calories, time, and a delete button).
+ * Related to: used by NutritionScreen.js.
+ */
+
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 export default function MealListItem({ meal, onDelete }) {

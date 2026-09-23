@@ -2,6 +2,14 @@ import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
+/**
+ * HomeScreen.js
+ *
+ * Purpose: The first tab. Shows a quick daily status (workout, breathing)
+ * and links to Edit Profile and Notification Settings.
+ * Related to: one of the 6 main tabs, defined in navigation/AppTabs.js.
+ */
+
 import { checkBackendHealth } from '../services/backendService';
 import { getWorkoutForDate } from '../database/repositories/workoutsRepository';
 import { getTodayCompletedSessions } from '../database/repositories/breathingRepository';

@@ -1,3 +1,11 @@
+/**
+ * RecommendationCard.js
+ *
+ * Purpose: Shows one AI Coach recommendation - a short title plus the
+ * reason behind it.
+ * Related to: used by AICoachScreen.js.
+ */
+
 import { StyleSheet, Text, View } from 'react-native';
 
 export default function RecommendationCard({ recommendation }) {

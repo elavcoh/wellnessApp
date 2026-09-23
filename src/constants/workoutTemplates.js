@@ -1,3 +1,12 @@
+/**
+ * workoutTemplates.js
+ *
+ * Purpose: Fixed, hand-written workout plans (no AI involved). Picks one
+ * template based on the user's experience level and home/gym preference.
+ * Related to: used by MovementScreen.js when the user generates a workout
+ * for the day.
+ */
+
 // Small, fixed set of templates - no generated/AI workouts here. Picked by
 // experience tier + home/gym only, matching the examples in the spec.
 // "Advanced" is folded into the intermediate tier to keep this to two tiers.
@@ -48,6 +57,7 @@ const WORKOUT_TEMPLATES = {
   },
 };
 
+// Picks one fixed template. No AI or complex logic here on purpose.
 export function selectWorkoutTemplate(profile) {
   const tier = profile?.workout_experience === 'Beginner' ? 'beginner' : 'intermediate';
   const location = profile?.training_location === 'Gym' ? 'gym' : 'home';

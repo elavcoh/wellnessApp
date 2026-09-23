@@ -1,5 +1,15 @@
+/**
+ * stepService.js
+ *
+ * Purpose: Talks to the iPhone's step counter (Pedometer) directly. This
+ * is the only file that touches the sensor hardware/permissions.
+ * Related to: used by MovementScreen.js, which then saves the result
+ * through stepsRepository.js.
+ */
+
 import { Pedometer } from 'expo-sensors';
 
+// Checks Pedometer permission/availability, then returns today's step count.
 // Never queries historical days - iOS only reliably retains about a week of
 // pedometer history anyway. We only ask for "today", and let the app build
 // up its own history in SQLite one saved day at a time.

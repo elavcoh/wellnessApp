@@ -1,10 +1,23 @@
+/**
+ * mealsRepository.js
+ *
+ * Purpose: Reads and writes logged meals in SQLite (manual meals and
+ * AI-analyzed meals both go through the same table).
+ * Related to: used by NutritionScreen.js (add/delete/list meals),
+ * wellnessContextBuilder.js (today's meals for the AI Coach), and
+ * ProgressScreen.js (meal counts per day).
+ */
+
 import { getDb } from '../db';
 
+// Returns all meals logged on one specific date, newest first.
 export async function getMealsForDate(date) {
   const db = await getDb();
   return db.getAllAsync('SELECT * FROM meals WHERE date = ? ORDER BY time DESC;', [date]);
 }
 
+// Saves one meal. photoUri/detectedFoodsJson/estimatedCalories/estimatedProteinG
+// are optional - a manual meal with no photo just leaves them null.
 export async function addMeal({
   mealType,
   description,
@@ -40,6 +53,8 @@ export async function deleteMeal(id) {
   await db.runAsync('DELETE FROM meals WHERE id = ?;', [id]);
 }
 
+// Returns how many meals were logged on each of the last N days.
+// Used by ProgressScreen.js to draw the "Meals Logged" chart.
 export async function getMealCountsByDate(days) {
   const db = await getDb();
   return db.getAllAsync(

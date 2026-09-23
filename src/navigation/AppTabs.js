@@ -1,3 +1,11 @@
+/**
+ * AppTabs.js
+ *
+ * Purpose: Defines the 6 main bottom tabs of the app.
+ * Related to: rendered by RootNavigator.js as the "MainTabs" screen, once
+ * the user has a saved profile.
+ */
+
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 import HomeScreen from '../screens/HomeScreen';

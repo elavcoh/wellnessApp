@@ -10,10 +10,23 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
+/**
+ * AICoachScreen.js
+ *
+ * Purpose: Lets the user ask wellness questions (suggested or typed) and
+ * shows the AI's answer, recommendations, and any missing information.
+ * The AI Coach only answers wellness questions - unrelated questions get a
+ * fixed refusal message from the backend.
+ * Related to: one of the 6 main tabs. Uses wellnessContextBuilder.js to
+ * gather today's data before every question.
+ */
+
 import RecommendationCard from '../components/RecommendationCard';
 import { buildTodayContext } from '../services/wellnessContextBuilder';
 import { getWellnessAdvice } from '../services/aiService';
 
+// Buttons shown above the text input, so the user can tap instead of typing.
+// Tapping one just calls handleAsk with this exact text.
 const SUGGESTED_QUESTIONS = [
   'What should I focus on today?',
   'Should I walk more today?',
@@ -22,6 +35,8 @@ const SUGGESTED_QUESTIONS = [
   'Give me a short wellness summary.',
 ];
 
+// Turns the raw workout.status value from SQLite ("not_started" etc.)
+// into text a user can read.
 const WORKOUT_STATUS_TEXT = {
   not_started: 'Not started',
   in_progress: 'In progress',
@@ -29,40 +44,68 @@ const WORKOUT_STATUS_TEXT = {
 };
 
 export default function AICoachScreen() {
+  // contextSummary: today's data (steps, meals, workout, breathing), shown
+  // in the small summary box at the top. Refreshed every time the screen
+  // is opened, so it reflects the latest state even if the user just came
+  // back from logging a meal in another tab.
   const [contextSummary, setContextSummary] = useState(null);
+
+  // customQuestion: whatever the user is currently typing in the text box.
   const [customQuestion, setCustomQuestion] = useState('');
-  const [status, setStatus] = useState('idle'); // idle | loading | done | error
+
+  // status: which part of the "ask a question" flow we're in right now.
+  //   idle    - nothing asked yet, or after a fresh screen load
+  //   loading - waiting for the backend/AI to respond
+  //   done    - got a result back, ok to show it
+  //   error   - the request failed (network/backend/AI down)
+  const [status, setStatus] = useState('idle');
+
+  // result: the AI Coach's last answer (see the shape returned by
+  // getWellnessAdvice - answer, recommendations, missing_information, etc.)
   const [result, setResult] = useState(null);
 
+  // Re-reads today's data from SQLite and stores it in contextSummary, just
+  // for display in the summary box (this is separate from the context sent
+  // with an actual question - see handleAsk below).
   const loadContextSummary = useCallback(async () => {
     const context = await buildTodayContext();
     setContextSummary(context);
   }, []);
 
+  // Runs every time this tab becomes visible (not just once on mount), so
+  // the summary box is never stale after switching tabs.
   useFocusEffect(
     useCallback(() => {
       loadContextSummary();
     }, [loadContextSummary])
   );
 
+  // Called both when a suggested-question button is tapped and when the
+  // user submits their own typed question - both paths lead here.
   async function handleAsk(question) {
     const trimmed = question.trim();
-    if (!trimmed) return;
+    if (!trimmed) return; // ignore empty taps (e.g. blank custom question)
 
     setStatus('loading');
-    setResult(null);
+    setResult(null); // clear the previous answer so it doesn't flash on screen
     try {
-      // Always build a fresh context right before asking, so the answer
-      // reflects anything logged since the screen last loaded.
+      // Build a brand-new context right now, not the one already sitting in
+      // contextSummary - the user may have logged something a moment ago,
+      // and the AI must see the real current state, not a stale snapshot.
       const context = await buildTodayContext();
       const advice = await getWellnessAdvice(trimmed, context);
       setResult(advice);
       setStatus('done');
     } catch (error) {
+      // Network down, backend not running, or OpenAI failed - show a
+      // friendly message instead of crashing (see the status === 'error' text below).
       setStatus('error');
     }
   }
 
+  // Pull out just the pieces of contextSummary the summary box needs to
+  // display. The "?." everywhere is because contextSummary is null until
+  // loadContextSummary finishes its first run.
   const steps = contextSummary?.today?.steps;
   const mealsCount = contextSummary?.today?.meals?.length ?? 0;
   const workoutStatus = contextSummary?.today?.workout?.status;
@@ -75,6 +118,9 @@ export default function AICoachScreen() {
         Recommendations below are based only on what you've actually logged in the app today.
       </Text>
 
+      {/* Quick read-only snapshot of today - "steps" is undefined until
+          contextSummary loads, so falls back to "No data yet" instead of
+          showing 0 (which would wrongly look like a measured zero). */}
       <View style={styles.summaryBox}>
         <Text style={styles.summaryLine}>
           Steps:{' '}
@@ -91,6 +137,8 @@ export default function AICoachScreen() {
         </Text>
       </View>
 
+      {/* One button per entry in SUGGESTED_QUESTIONS - tapping any of them
+          just runs handleAsk with that exact question text. */}
       <Text style={styles.sectionTitle}>Suggested Questions</Text>
       {SUGGESTED_QUESTIONS.map((question) => (
         <Pressable
@@ -102,6 +150,7 @@ export default function AICoachScreen() {
         </Pressable>
       ))}
 
+      {/* Free-text alternative to the suggested-question buttons above. */}
       <Text style={styles.sectionTitle}>Ask Your Own Question</Text>
       <TextInput
         style={styles.input}
@@ -113,6 +162,8 @@ export default function AICoachScreen() {
         <Text style={styles.askButtonText}>Ask</Text>
       </Pressable>
 
+      {/* Below here: only one of these three blocks is ever visible at a
+          time, controlled by the `status` state set in handleAsk. */}
       {status === 'loading' && <ActivityIndicator size="large" style={styles.loading} />}
 
       {status === 'error' && (
@@ -125,6 +176,9 @@ export default function AICoachScreen() {
         <View style={styles.resultBox}>
           <Text style={styles.answerText}>{result.answer}</Text>
 
+          {/* For an off-topic question, the backend already forces this
+              array to be empty, so this section simply won't render - no
+              extra check needed here for that case. */}
           {result.recommendations.length > 0 && (
             <>
               <Text style={styles.resultSectionTitle}>Recommendations</Text>
@@ -134,6 +188,9 @@ export default function AICoachScreen() {
             </>
           )}
 
+          {/* Things the AI would have needed to answer more fully but
+              weren't found in today's data - it's told never to guess
+              these, so it lists them honestly instead. */}
           {result.missing_information.length > 0 && (
             <>
               <Text style={styles.resultSectionTitle}>Missing Information</Text>

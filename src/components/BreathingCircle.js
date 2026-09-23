@@ -1,3 +1,11 @@
+/**
+ * BreathingCircle.js
+ *
+ * Purpose: The animated circle that expands on inhale and contracts on
+ * exhale, plus the current phase label ("Inhale", "Hold", "Exhale").
+ * Related to: used by BreathingScreen.js, which controls the animation.
+ */
+
 import { Animated, StyleSheet, Text, View } from 'react-native';
 
 export default function BreathingCircle({ scale, phaseLabel }) {

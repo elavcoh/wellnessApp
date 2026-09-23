@@ -1,3 +1,11 @@
+/**
+ * ExerciseItem.js
+ *
+ * Purpose: Shows one exercise in a workout, with a checkbox the user taps
+ * to mark it done.
+ * Related to: used by MovementScreen.js.
+ */
+
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 export default function ExerciseItem({ exercise, onToggle }) {

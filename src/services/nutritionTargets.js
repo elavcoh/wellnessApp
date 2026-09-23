@@ -1,13 +1,22 @@
-// Deterministic, non-AI calorie/protein target estimates.
-//
-// Calories: Mifflin-St Jeor BMR formula (a well-established general-purpose
-// estimate, does not need body-fat% like some alternatives), scaled by an
-// activity multiplier, then shifted by a fixed, moderate offset per goal.
-// Protein: grams-per-kg-bodyweight, the standard simple approach in general
-// fitness guidance (not a medical calculation).
-//
-// Returns null whenever required profile data (notably `sex`) is missing -
-// we never guess a value the user hasn't provided.
+/**
+ * nutritionTargets.js
+ *
+ * Purpose: Calculates estimated daily calorie and protein targets from the
+ * user's profile, using plain math (no AI). This is a deliberate design
+ * choice: the app decides the fundamental numbers, and the AI Coach can
+ * only reference or comment on them, never invent them.
+ * Related to: used by wellnessContextBuilder.js, NutritionScreen.js, and
+ * ProfileSetupScreen.js (live target preview + custom target check).
+ *
+ * Calories: Mifflin-St Jeor BMR formula (a well-established general-purpose
+ * estimate, does not need body-fat% like some alternatives), scaled by an
+ * activity multiplier, then shifted by a fixed, moderate offset per goal.
+ * Protein: grams-per-kg-bodyweight, the standard simple approach in general
+ * fitness guidance (not a medical calculation).
+ *
+ * Returns null whenever required profile data (notably `sex`) is missing -
+ * we never guess a value the user hasn't provided.
+ */
 
 const ACTIVITY_MULTIPLIERS = {
   Sedentary: 1.2,
@@ -32,6 +41,7 @@ const GOAL_PROTEIN_PER_KG = {
 
 const MINIMUM_CALORIE_FLOOR = 1200;
 
+// Checks that every profile field the formula needs is actually filled in.
 function hasRequiredFields(profile) {
   return Boolean(
     profile &&
@@ -44,6 +54,9 @@ function hasRequiredFields(profile) {
   );
 }
 
+// Main calorie target calculation. Uses the user's own custom target if
+// they set one, otherwise runs the BMR formula. Returns null if the
+// profile is missing required fields (never guesses a value).
 export function calculateCalorieTarget(profile) {
   if (profile?.calorie_target_override) {
     return profile.calorie_target_override;
@@ -66,6 +79,7 @@ export function calculateCalorieTarget(profile) {
   return Math.max(rounded, MINIMUM_CALORIE_FLOOR);
 }
 
+// Protein target calculation, in grams per day.
 export function calculateProteinTarget(profile) {
   if (!profile?.weight_kg || !profile?.goal) return null;
 

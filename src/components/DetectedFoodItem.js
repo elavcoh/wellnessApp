@@ -1,3 +1,12 @@
+/**
+ * DetectedFoodItem.js
+ *
+ * Purpose: Shows one food detected by AI in a meal photo, with its
+ * estimated calories/protein/carbs/fat, and a button to remove it if the
+ * AI got it wrong.
+ * Related to: used by NutritionScreen.js's "review before saving" step.
+ */
+
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 export default function DetectedFoodItem({ food, onRemove }) {

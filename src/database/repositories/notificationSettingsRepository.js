@@ -1,5 +1,15 @@
+/**
+ * notificationSettingsRepository.js
+ *
+ * Purpose: Reads and writes the user's local notification preferences
+ * (meal / movement / evening summary, each on or off). One row only.
+ * Related to: used by NotificationSettingsScreen.js and by
+ * RootNavigator.js (to re-apply schedules every time the app starts).
+ */
+
 import { getDb } from '../db';
 
+// Used before the user has ever saved settings (e.g. first app launch).
 const DEFAULT_SETTINGS = {
   meal_reminders_enabled: 0,
   movement_reminders_enabled: 0,

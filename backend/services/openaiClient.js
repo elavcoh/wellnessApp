@@ -1,11 +1,28 @@
+/**
+ * services/openaiClient.js
+ *
+ * Purpose: The only file that calls the OpenAI API. Holds both AI
+ * features' prompts and structured-output schemas: meal photo analysis,
+ * and the AI Coach (which is restricted to wellness topics only, enforced
+ * both in the prompt and again in code).
+ * Related to: called by routes/analyzeMeal.js and routes/wellnessAdvice.js.
+ */
+
+// "openai" is the official Node.js library for calling OpenAI's API - it
+// just turns our JS objects into HTTP requests and parses the JSON reply.
 const OpenAI = require('openai');
 
+// Reads the API key from backend/.env (loaded in server.js). This "client"
+// object is what actually sends requests to OpenAI.
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Cheapest current OpenAI model that supports image input - more than
 // enough for "list the foods you see in this photo".
 const MODEL = 'gpt-5.6-luna';
 
+// The "system prompt" is a block of instructions sent with every request
+// that tells the model how to behave for this specific feature - it's
+// never shown to the user, and the user's own input can't override it.
 const SYSTEM_PROMPT = `You are a wellness app assistant that looks at a photo and checks whether it shows a meal.
 - First decide whether the photo actually shows food or a meal. Set is_food to true or false.
 - If is_food is false (e.g. the photo shows a person, an object, a screenshot, anything without food): foods must be an empty array, all totals must be 0, meal_summary should briefly state no food was detected, and general_observation should briefly explain what the photo appears to show instead. Never invent food items for a non-food photo.
@@ -13,6 +30,11 @@ const SYSTEM_PROMPT = `You are a wellness app assistant that looks at a photo an
 - total_estimated_calories/protein/carbs/fat must equal the sum of the per-food values.
 - Do not give medical or dietary treatment advice. This is general wellness guidance only.`;
 
+// A JSON Schema describing EXACTLY what shape the AI's answer must have.
+// This isn't just a suggestion - OpenAI's "strict" structured-output mode
+// (see the "text.format" block in analyzeMealImage below) guarantees the
+// response always matches this shape, so our code never has to guard
+// against a missing field or a field of the wrong type.
 const MEAL_ANALYSIS_SCHEMA = {
   type: 'object',
   properties: {
@@ -62,9 +84,17 @@ const MEAL_ANALYSIS_SCHEMA = {
   additionalProperties: false,
 };
 
+// Sends one meal photo to OpenAI and returns the structured JSON result
+// (foods, calories, protein, carbs, fat) - always following MEAL_ANALYSIS_SCHEMA.
 async function analyzeMealImage(base64Image, mimeType) {
   const response = await client.responses.create({
     model: MODEL,
+    // "input" is the conversation sent to the model - one system message
+    // (our instructions) plus one user message. The user message here
+    // mixes two content types in one array: a short text instruction and
+    // the image itself, encoded as a "data URL" (mimeType + base64 bytes
+    // glued together) - this is the standard way to send an inline image
+    // to OpenAI's API without hosting it anywhere.
     input: [
       { role: 'system', content: SYSTEM_PROMPT },
       {
@@ -79,6 +109,8 @@ async function analyzeMealImage(base64Image, mimeType) {
         ],
       },
     ],
+    // Forces the reply to match MEAL_ANALYSIS_SCHEMA exactly (see the
+    // comment above that schema for what "strict" guarantees).
     text: {
       format: {
         type: 'json_schema',
@@ -89,9 +121,15 @@ async function analyzeMealImage(base64Image, mimeType) {
     },
   });
 
+  // response.output_text is the model's reply as a plain string - since we
+  // used a strict JSON schema, it's guaranteed to be valid JSON matching
+  // MEAL_ANALYSIS_SCHEMA, so a plain JSON.parse is safe here.
   return JSON.parse(response.output_text);
 }
 
+// The exact wording shown for any out-of-scope question. Kept as one
+// constant so it's used identically in the prompt (telling the model what
+// to say) and in code (forcing it, in case the model doesn't comply).
 const REFUSAL_MESSAGE =
   "I'm your Wellness Coach, so I can only help with nutrition, movement, workouts, breathing, and wellness information from this app.";
 
@@ -158,12 +196,18 @@ const WELLNESS_ADVICE_SCHEMA = {
   additionalProperties: false,
 };
 
+// Sends one question + the app's wellness context to OpenAI, then
+// double-checks in code that an out-of-scope question really gets the
+// fixed refusal message (not just trusting the model followed the prompt).
 async function getWellnessAdvice(question, context) {
   const response = await client.responses.create({
     model: MODEL,
     input: [
       { role: 'system', content: WELLNESS_ADVICE_SYSTEM_PROMPT },
       {
+        // Unlike the meal-photo request above, this user message is plain
+        // text - we just paste the question and the whole context object
+        // (turned into a JSON string) into one message for the model to read.
         role: 'user',
         content: `User question: ${question}\n\nApp context (JSON):\n${JSON.stringify(context)}`,
       },

@@ -1,3 +1,12 @@
+/**
+ * breathingPatterns.js
+ *
+ * Purpose: Static list of breathing sessions (title, duration, and the
+ * inhale/hold/exhale timing pattern). No AI is used here.
+ * Related to: used by BreathingScreen.js to show the session list and to
+ * drive the breathing timer/animation.
+ */
+
 // All hold phases are short (0-4 seconds) - safe, general wellness content,
 // not medical or extreme breath-holding.
 

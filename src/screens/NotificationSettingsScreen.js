@@ -2,6 +2,14 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
+/**
+ * NotificationSettingsScreen.js
+ *
+ * Purpose: Lets the user turn the three local reminders on/off, and send a
+ * test notification. Local notifications only, no push/cloud.
+ * Related to: reached from HomeScreen.js via RootNavigator.js.
+ */
+
 import {
   getNotificationSettings,
   saveNotificationSettings,
@@ -14,14 +22,20 @@ import {
 } from '../services/notificationService';
 
 export default function NotificationSettingsScreen() {
-  const [settings, setSettings] = useState(null);
-  const [permissionDenied, setPermissionDenied] = useState(false);
-  const [testStatus, setTestStatus] = useState(null);
+  const [settings, setSettings] = useState(null); // { meal_reminders_enabled, movement_reminders_enabled, evening_summary_enabled } - null until loaded
+  const [permissionDenied, setPermissionDenied] = useState(false); // true once iOS permission is permanently refused
+  const [testStatus, setTestStatus] = useState(null); // confirmation text shown after the test button is tapped
 
+  // Reads the saved on/off settings, and separately checks whether iOS
+  // notification permission has been permanently denied (so we can show
+  // the "enable in Settings" message even before the user touches a switch).
   const load = useCallback(async () => {
     const saved = await getNotificationSettings();
     setSettings(saved);
     const permission = await getNotificationPermissionStatus();
+    // canAskAgain is false once the user has denied the iOS prompt before -
+    // at that point the app can never show the system prompt again, only
+    // point the user to Settings themselves.
     setPermissionDenied(!permission.granted && !permission.canAskAgain);
   }, []);
 
@@ -31,6 +45,8 @@ export default function NotificationSettingsScreen() {
     }, [load])
   );
 
+  // Turns one reminder on/off. Asks for permission first if needed - if
+  // permission is refused, the switch stays off and nothing is saved.
   async function handleToggle(key, value) {
     if (value) {
       const granted = await requestNotificationPermission();
@@ -41,12 +57,18 @@ export default function NotificationSettingsScreen() {
       setPermissionDenied(false);
     }
 
+    // key is one of the three column names, e.g. "meal_reminders_enabled" -
+    // stored as 1/0 in SQLite, since it doesn't have a real boolean type.
     const updated = { ...settings, [key]: value ? 1 : 0 };
     setSettings(updated);
     await saveNotificationSettings(updated);
+    // Immediately turns this change into a real scheduled (or canceled)
+    // iOS notification - see notificationService.js for how that works.
     await syncScheduledNotifications(updated);
   }
 
+  // The "Send test notification in 5 seconds" button - a one-off
+  // notification, unrelated to the three daily reminder toggles above.
   async function handleTestNotification() {
     const granted = await requestNotificationPermission();
     if (!granted) {

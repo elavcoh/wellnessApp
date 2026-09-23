@@ -1,3 +1,14 @@
+/**
+ * wellnessContextBuilder.js
+ *
+ * Purpose: Collects today's data from SQLite (profile, meals, steps,
+ * workout, breathing) plus the calculated nutrition targets, and packages
+ * it into one plain JSON object. This is the ONLY data the AI Coach is
+ * allowed to use - it never queries the database itself.
+ * Related to: used by AICoachScreen.js before every question, and by
+ * ProfileSetupScreen.js's "check my custom target" feature.
+ */
+
 import { getProfile } from '../database/repositories/userProfileRepository';
 import { getMealsForDate } from '../database/repositories/mealsRepository';
 import { getStepsForDate } from '../database/repositories/stepsRepository';
@@ -6,12 +17,16 @@ import { getTodayCompletedSessions } from '../database/repositories/breathingRep
 import { getTodayDateString } from '../utils/dateUtils';
 import { calculateCalorieTarget, calculateProteinTarget } from './nutritionTargets';
 
+// Builds the full "today" context object from scratch, fresh every time it
+// is called - never cached, so the AI Coach always sees the latest data.
 // null means "no data recorded" (e.g. Movement hasn't been opened today, or
 // no workout was generated) - kept distinct from 0/"not_started" so the AI
 // never mistakes "not measured" for "confirmed zero activity".
 export async function buildTodayContext() {
   const today = getTodayDateString();
 
+  // Read all 5 sources at once (instead of one after another) since none
+  // of them depend on each other - this makes the whole function faster.
   const [profile, meals, stepsRow, workout, breathingSessions] = await Promise.all([
     getProfile(),
     getMealsForDate(today),
@@ -20,12 +35,18 @@ export async function buildTodayContext() {
     getTodayCompletedSessions(),
   ]);
 
+  // Run the same deterministic formulas ProfileSetupScreen.js and
+  // NutritionScreen.js use, so the AI Coach sees the exact same numbers
+  // the user sees on screen - never a different, AI-computed version.
   const calorieTarget = calculateCalorieTarget(profile);
   const proteinTarget = calculateProteinTarget(profile);
   const caloriesLogged = meals.reduce((sum, meal) => sum + (meal.estimated_calories || 0), 0);
   const proteinLogged = meals.reduce((sum, meal) => sum + (meal.estimated_protein_g || 0), 0);
 
   return {
+    // Only pick the fields the AI actually needs to reason about wellness -
+    // not every column in the table (e.g. created_at/updated_at timestamps
+    // are left out, they'd be meaningless to the AI).
     profile: profile
       ? {
           age: profile.age,
@@ -53,6 +74,9 @@ export async function buildTodayContext() {
           }
         : null,
     today: {
+      // Each meal's stored detected_foods_json is a JSON *string* in
+      // SQLite - parse it back into a real array here so the AI receives
+      // actual JSON, not a string full of escaped quotes.
       meals: meals.map((meal) => ({
         meal_type: meal.meal_type,
         description: meal.description,
@@ -62,6 +86,9 @@ export async function buildTodayContext() {
           ? JSON.parse(meal.detected_foods_json).foods
           : null,
       })),
+      // "remaining" is done here in plain JS subtraction rather than left
+      // for the AI to compute - see the "deterministic app logic vs AI"
+      // rule this project follows (nutritionTargets.js has the full formula).
       estimated_calories_logged: caloriesLogged,
       estimated_calories_remaining: calorieTarget ? calorieTarget - caloriesLogged : null,
       estimated_protein_logged_g: proteinLogged,
@@ -79,6 +106,8 @@ export async function buildTodayContext() {
             })),
           }
         : null,
+      // Just a count - no per-session detail is needed for the AI Coach's
+      // level of questions ("did I do any breathing today?").
       breathing: { sessions_completed: breathingSessions.length },
     },
   };

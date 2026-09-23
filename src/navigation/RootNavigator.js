@@ -3,6 +3,16 @@ import { ActivityIndicator, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+/**
+ * RootNavigator.js
+ *
+ * Purpose: The top-level navigator. Decides whether to show onboarding
+ * (Welcome + Profile Setup) or go straight to the main app, based on
+ * whether a profile already exists. Also sets up the database and
+ * notification schedules once at startup.
+ * Related to: rendered by App.js. Owns the app's only NavigationContainer.
+ */
+
 import WelcomeScreen from '../screens/WelcomeScreen';
 import ProfileSetupScreen from '../screens/ProfileSetupScreen';
 import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
@@ -18,6 +28,8 @@ export default function RootNavigator() {
   // null = still checking, true/false = whether a profile already exists
   const [hasProfile, setHasProfile] = useState(null);
 
+  // Runs once when the app starts: creates the database tables, checks if
+  // a profile already exists, and re-applies any saved notification schedules.
   useEffect(() => {
     async function checkProfile() {
       await initDatabase();
