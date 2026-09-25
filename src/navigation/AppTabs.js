@@ -17,6 +17,11 @@ import ProgressScreen from '../screens/ProgressScreen';
 
 const Tab = createBottomTabNavigator();
 
+// This component itself has no logic - it's just a declaration of "these 6
+// screens exist as tabs, in this order". React Navigation handles showing
+// the tab bar, switching screens, and keeping each screen's own state alive
+// in the background when you switch away and back (which is why, for
+// example, Movement's step count doesn't reset just from visiting another tab).
 export default function AppTabs() {
   return (
     <Tab.Navigator>

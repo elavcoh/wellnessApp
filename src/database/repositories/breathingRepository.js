@@ -36,6 +36,11 @@ export async function getTodayCompletedSessions() {
 
 // Returns how many sessions were completed on each of the last N days.
 // Used by ProgressScreen.js to draw the "Breathing" chart.
+// Unlike the other tables, breathing_sessions has no separate "date" column
+// - only a full timestamp (completed_at, e.g. "2026-09-24T18:03:00.000Z").
+// SQLite's built-in date(...) function chops that down to just the day part
+// ("2026-09-24"), which is what lets us GROUP BY date the same way
+// mealsRepository.js groups by its own date column.
 export async function getBreathingCountsByDate(days) {
   const db = await getDb();
   return db.getAllAsync(

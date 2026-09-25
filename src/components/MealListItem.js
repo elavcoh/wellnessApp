@@ -8,18 +8,27 @@
 
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
+// Props:
+//   meal     - one row straight from the meals SQLite table (see mealsRepository.js)
+//   onDelete - called with meal.id when the ✕ button is tapped
 export default function MealListItem({ meal, onDelete }) {
   return (
     <View style={styles.row}>
+      {/* Only show a thumbnail if this meal actually has a saved photo. */}
       {meal.photo_uri ? (
         <Image source={{ uri: meal.photo_uri }} style={styles.thumbnail} />
       ) : null}
       <View style={styles.info}>
         <Text style={styles.mealType}>
           {meal.meal_type}
+          {/* "· AI" only appears if this meal was saved with a confirmed AI
+              photo analysis - detected_foods_json is null for manual meals. */}
           {meal.detected_foods_json ? ' · AI' : ''}
         </Text>
         <Text style={styles.description}>{meal.description}</Text>
+        {/* typeof check (not just "if meal.estimated_calories") because a
+            meal saved before this feature existed has this field as null,
+            and "~null kcal" would look broken - we just hide the line instead. */}
         {typeof meal.estimated_calories === 'number' && (
           <Text style={styles.calories}>~{meal.estimated_calories} kcal</Text>
         )}

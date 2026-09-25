@@ -16,12 +16,16 @@ const DEFAULT_SETTINGS = {
   evening_summary_enabled: 0,
 };
 
+// Reads the saved settings, or DEFAULT_SETTINGS (all off) if the user has
+// never opened Notification Settings and saved anything yet.
 export async function getNotificationSettings() {
   const db = await getDb();
   const row = await db.getFirstAsync('SELECT * FROM notification_settings ORDER BY id LIMIT 1;');
   return row ?? DEFAULT_SETTINGS;
 }
 
+// Same insert-or-update pattern as userProfileRepository.saveProfile() -
+// one row total, created the first time, updated every time after.
 export async function saveNotificationSettings(settings) {
   const db = await getDb();
   const existing = await db.getFirstAsync('SELECT id FROM notification_settings ORDER BY id LIMIT 1;');

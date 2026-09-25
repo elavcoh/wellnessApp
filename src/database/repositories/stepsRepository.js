@@ -14,6 +14,9 @@ import { getDb } from '../db';
 export async function saveTodaySteps({ date, stepCount, stepGoalSnapshot, source }) {
   const db = await getDb();
   const now = new Date().toISOString();
+  // "SELECT id" (not "SELECT *") because we only need to know WHETHER a row
+  // for today exists, and if so, its id - we don't need any of its other
+  // columns just to decide between INSERT and UPDATE below.
   const existing = await db.getFirstAsync('SELECT id FROM steps_daily WHERE date = ?;', [date]);
 
   if (existing) {

@@ -21,13 +21,17 @@ Notifications.setNotificationHandler({
 });
 
 // Stable identifiers so re-scheduling replaces the previous one instead of
-// piling up duplicates.
+// piling up duplicates. Each notification we schedule is given one of
+// these exact id strings - that's what lets us find and cancel or replace
+// a specific reminder later (e.g. cancelScheduledNotificationAsync below).
 const IDENTIFIERS = {
   meal: 'meal-reminder',
   movement: 'movement-reminder',
   eveningSummary: 'evening-summary-reminder',
 };
 
+// The actual wording and time-of-day for each of the 3 reminder types.
+// "hour"/"minute" are in 24-hour local device time (17 = 5 PM).
 const REMINDERS = {
   meal: {
     title: 'Meal check-in',
@@ -49,6 +53,9 @@ const REMINDERS = {
   },
 };
 
+// Just checks the current iOS permission status without asking for
+// anything - used to decide what message to show on screen (see
+// NotificationSettingsScreen.js), separately from actually requesting it.
 export async function getNotificationPermissionStatus() {
   return Notifications.getPermissionsAsync();
 }
@@ -65,13 +72,21 @@ export async function requestNotificationPermission() {
 }
 
 // Schedules one reminder to repeat every day at a fixed time.
+// "key" is one of 'meal' | 'movement' | 'eveningSummary' - just picks which
+// entry of REMINDERS/IDENTIFIERS to use.
 async function scheduleDaily(key) {
   const { title, body, hour, minute } = REMINDERS[key];
   const identifier = IDENTIFIERS[key];
+  // Cancel any existing schedule under this exact identifier first. The
+  // ".catch(() => {})" means "if there was nothing to cancel, that's fine,
+  // don't treat it as an error" - this makes the function safe to call
+  // whether or not this reminder was already scheduled.
   await Notifications.cancelScheduledNotificationAsync(identifier).catch(() => {});
   await Notifications.scheduleNotificationAsync({
     identifier,
     content: { title, body },
+    // type: DAILY + hour/minute means "fire once a day, every day, at this
+    // exact clock time" - this is a repeating trigger, not a one-time one.
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DAILY,
       hour,
@@ -80,6 +95,8 @@ async function scheduleDaily(key) {
   });
 }
 
+// Removes one scheduled reminder. Same "ignore if it wasn't there" safety
+// as scheduleDaily above.
 async function cancelReminder(key) {
   await Notifications.cancelScheduledNotificationAsync(IDENTIFIERS[key]).catch(() => {});
 }

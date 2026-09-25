@@ -8,7 +8,13 @@
 
 import { Pressable, StyleSheet, Text } from 'react-native';
 
+// Props:
+//   session - one entry from breathingPatterns.js (title, description,
+//             durationSeconds, level, pattern)
+//   onPress - called (no arguments) when the card is tapped, to start this session
 export default function SessionCard({ session, onPress }) {
+  // durationSeconds is stored in seconds (easier for the timer logic in
+  // BreathingScreen.js) but shown to the user in whole minutes.
   const minutes = Math.round(session.durationSeconds / 60);
   return (
     <Pressable style={styles.card} onPress={onPress}>

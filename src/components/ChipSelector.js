@@ -8,11 +8,19 @@
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+// Props:
+//   label    - text shown above the chips, e.g. "Goal"
+//   options  - array of strings to choose from, e.g. ["Male", "Female"]
+//   selected - which option is currently chosen (or null if none yet)
+//   onSelect - called with the option text when the user taps a chip
 export default function ChipSelector({ label, options, selected, onSelect }) {
   return (
     <View style={styles.wrapper}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.row}>
+        {/* One chip per option. The parent decides what "selected" means -
+            this component just compares each option to it and highlights
+            the match. It has no state of its own. */}
         {options.map((option) => {
           const isSelected = option === selected;
           return (

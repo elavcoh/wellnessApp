@@ -8,6 +8,10 @@
 
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+// This screen has no state and no data loading - it's the simplest screen
+// in the app, just a message and one button. "navigation" is provided
+// automatically by React Navigation (see RootNavigator.js, which lists
+// "Welcome" as one of its screens).
 export default function WelcomeScreen({ navigation }) {
   return (
     <View style={styles.container}>
@@ -15,6 +19,8 @@ export default function WelcomeScreen({ navigation }) {
       <Text style={styles.subtitle}>
         Let's set up your profile so we can tailor your daily suggestions.
       </Text>
+      {/* "ProfileSetup" is the route name registered in RootNavigator.js -
+          tapping this button moves forward in the one-time onboarding flow. */}
       <Pressable
         style={styles.button}
         onPress={() => navigation.navigate('ProfileSetup')}

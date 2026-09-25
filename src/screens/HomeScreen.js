@@ -21,14 +21,25 @@ const WORKOUT_STATUS_LABELS = {
   completed: 'Workout completed',
 };
 
+// "navigation" here is passed in automatically by React Navigation to every
+// screen it renders - it's how this screen can move to a different screen
+// (see navigation.navigate calls below) even though HomeScreen itself
+// never appears in RootNavigator.js's list of routes (it's nested one
+// level deeper, inside AppTabs.js).
 export default function HomeScreen({ navigation }) {
-  const [connectionStatus, setConnectionStatus] = useState(null);
+  const [connectionStatus, setConnectionStatus] = useState(null); // null | 'checking' | 'connected' | 'failed'
   const [workoutStatusLabel, setWorkoutStatusLabel] = useState(WORKOUT_STATUS_LABELS.not_started);
   const [breathingStatusLabel, setBreathingStatusLabel] = useState('No breathing session today');
 
+  // Every time this tab is opened, re-check today's workout and breathing
+  // status - this is what keeps Home in sync after the user does something
+  // on the Movement or Breathing tab and then switches back here.
   useFocusEffect(
     useCallback(() => {
       getWorkoutForDate(getTodayDateString()).then((workout) => {
+        // workout is null if none was generated yet today - "?? 'not_started'"
+        // handles that by falling back to the same label as a real
+        // not-started workout.
         setWorkoutStatusLabel(WORKOUT_STATUS_LABELS[workout?.status ?? 'not_started']);
       });
       getTodayCompletedSessions().then((sessions) => {
@@ -39,6 +50,7 @@ export default function HomeScreen({ navigation }) {
     }, [])
   );
 
+  // Handler for the debug "Test Backend Connection" button below.
   async function handleTestConnection() {
     setConnectionStatus('checking');
     const isConnected = await checkBackendHealth();
@@ -65,7 +77,11 @@ export default function HomeScreen({ navigation }) {
         </Pressable>
       </View>
 
-      {/* Temporary backend connectivity check for Milestone 5 */}
+      {/* This whole box is a leftover development/debug tool from early in
+          the project (checking whether the local backend server can be
+          reached) - it isn't part of the real product features, it's just
+          useful for confirming the backend is running before testing
+          Nutrition's photo analysis or the AI Coach. */}
       <View style={styles.backendTest}>
         <Pressable style={styles.testButton} onPress={handleTestConnection}>
           <Text style={styles.testButtonText}>Test Backend Connection</Text>

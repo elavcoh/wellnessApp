@@ -8,6 +8,9 @@
 
 import { StyleSheet, Text, View } from 'react-native';
 
+// Props:
+//   recommendation - one item from the AI Coach's "recommendations" array:
+//                     { title, reason } (see openaiClient.js's schema)
 export default function RecommendationCard({ recommendation }) {
   return (
     <View style={styles.card}>

@@ -10,8 +10,13 @@
 
 import { getDb } from '../db';
 
-// Converts a raw SQLite row into a normal object with exercises as a real
-// array (SQLite stores it as a JSON string, not a real array).
+// SQLite columns can only hold simple values (numbers, text) - there's no
+// "array" column type. So the whole exercises list is stored as one long
+// JSON text string in the exercises_json column (JSON.stringify when
+// saving, see createWorkout below). This function is the reverse step:
+// every time we read a workout row back out, turn that text back into a
+// real JavaScript array with JSON.parse, so the rest of the app can just
+// use workout.exercises like a normal array.
 function rowToWorkout(row) {
   if (!row) return null;
   return { ...row, exercises: JSON.parse(row.exercises_json) };
