@@ -1,11 +1,5 @@
 /**
- * schema.js
- *
- * Purpose: Creates all local SQLite tables the first time the app runs,
- * and adds new columns to existing tables when the app is updated (see
- * addColumnIfMissing below).
- * Related to: called once at app startup, from RootNavigator.js. Every
- * table created here is used by a matching file in database/repositories/.
+ * Creates the local SQLite tables used by the app.
  */
 
 import { getDb } from './db';

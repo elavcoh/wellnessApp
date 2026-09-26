@@ -1,10 +1,5 @@
 /**
- * notificationService.js
- *
- * Purpose: Wraps expo-notifications - permission requests, and
- * scheduling/canceling the three local reminders (meal, movement,
- * evening summary). Local notifications only, no push/cloud.
- * Related to: used by NotificationSettingsScreen.js and RootNavigator.js.
+ * Handles local app notifications.
  */
 
 import * as Notifications from 'expo-notifications';

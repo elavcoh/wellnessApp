@@ -1,10 +1,5 @@
 /**
- * stepService.js
- *
- * Purpose: Talks to the iPhone's step counter (Pedometer) directly. This
- * is the only file that touches the sensor hardware/permissions.
- * Related to: used by MovementScreen.js, which then saves the result
- * through stepsRepository.js.
+ * Reads the phone's step count for today.
  */
 
 import { Pedometer } from 'expo-sensors';

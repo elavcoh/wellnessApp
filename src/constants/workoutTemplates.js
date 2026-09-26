@@ -7,6 +7,12 @@
  * for the day.
  */
 
+// These templates are intentionally deterministic: they are fixed, human-written
+// workout plans that the app picks based on the user's profile. The idea is to
+// keep workouts simple and repeatable rather than making them feel random or
+// AI-generated. Because the app stores a workout as a plain list of exercises,
+// this file acts like a library of prebuilt routines that MovementScreen can
+// insert into the daily plan without any extra logic.
 // Small, fixed set of templates - no generated/AI workouts here. Picked by
 // experience tier + home/gym only, matching the examples in the spec.
 // "Advanced" is folded into the intermediate tier to keep this to two tiers.

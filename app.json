@@ -13,7 +13,10 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -42,6 +45,11 @@
           "motionPermission": "Allow Wellness App to access motion data to track your steps."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "daa64bb1-878d-412a-9cbd-90dfba93c390"
+      }
+    }
   }
 }

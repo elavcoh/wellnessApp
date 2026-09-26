@@ -1,11 +1,5 @@
 /**
- * workoutsRepository.js
- *
- * Purpose: Reads and writes the daily workout in SQLite. One workout per
- * day; exercises are stored as a JSON list inside one column.
- * Related to: used by MovementScreen.js (create/update today's workout),
- * HomeScreen.js (workout status), wellnessContextBuilder.js, and
- * ProgressScreen.js (workout completion chart).
+ * Reads and saves the daily workout.
  */
 
 import { getDb } from '../db';

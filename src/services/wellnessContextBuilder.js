@@ -1,12 +1,5 @@
 /**
- * wellnessContextBuilder.js
- *
- * Purpose: Collects today's data from SQLite (profile, meals, steps,
- * workout, breathing) plus the calculated nutrition targets, and packages
- * it into one plain JSON object. This is the ONLY data the AI Coach is
- * allowed to use - it never queries the database itself.
- * Related to: used by AICoachScreen.js before every question, and by
- * ProfileSetupScreen.js's "check my custom target" feature.
+ * Builds the JSON used for AI coach questions.
  */
 
 import { getProfile } from '../database/repositories/userProfileRepository';

@@ -3,13 +3,7 @@ import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { useFocusEffect } from '@react-navigation/native';
 
 /**
- * BreathingScreen.js
- *
- * Purpose: Shows a list of guided breathing sessions and runs the
- * inhale/hold/exhale timer with an animated circle when one is started.
- * No AI is used here - everything is a fixed pattern from
- * breathingPatterns.js.
- * Related to: one of the 6 main tabs.
+ * Guided breathing screen.
  */
 
 import SessionCard from '../components/SessionCard';

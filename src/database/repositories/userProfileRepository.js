@@ -1,10 +1,5 @@
 /**
- * userProfileRepository.js
- *
- * Purpose: Reads and writes the single user_profile row in SQLite.
- * Related to: used by ProfileSetupScreen.js (create/edit), and read by
- * several screens/services (Movement, Nutrition, AI Coach context) that
- * need profile fields like goal, weight, or step_goal.
+ * Reads and saves the single profile row.
  */
 
 import { getDb } from '../db';

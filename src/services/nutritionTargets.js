@@ -1,23 +1,11 @@
 /**
  * nutritionTargets.js
  *
- * Purpose: Calculates estimated daily calorie and protein targets from the
- * user's profile, using plain math (no AI). This is a deliberate design
- * choice: the app decides the fundamental numbers, and the AI Coach can
- * only reference or comment on them, never invent them.
- * Related to: used by wellnessContextBuilder.js, NutritionScreen.js, and
- * ProfileSetupScreen.js (live target preview + custom target check).
- *
- * Calories: Mifflin-St Jeor BMR formula (a well-established general-purpose
- * estimate, does not need body-fat% like some alternatives), scaled by an
- * activity multiplier, then shifted by a fixed, moderate offset per goal.
- * Protein: grams-per-kg-bodyweight, the standard simple approach in general
- * fitness guidance (not a medical calculation).
- *
- * Returns null whenever required profile data (notably `sex`) is missing -
- * we never guess a value the user hasn't provided.
+ * Simple daily nutrition targets from the saved profile.
+ * This is just math, not AI.
  */
 
+// Rough activity factor: more movement = higher calorie burn.
 const ACTIVITY_MULTIPLIERS = {
   Sedentary: 1.2,
   Light: 1.375,
@@ -25,6 +13,7 @@ const ACTIVITY_MULTIPLIERS = {
   Active: 1.725,
 };
 
+// Adjust the estimate based on the user's goal.
 const GOAL_CALORIE_OFFSETS = {
   'Lose weight': -500,
   Maintain: 0,
@@ -32,6 +21,7 @@ const GOAL_CALORIE_OFFSETS = {
   'General wellness': 0,
 };
 
+// Protein target in grams per kg of body weight.
 const GOAL_PROTEIN_PER_KG = {
   'Lose weight': 1.6,
   Maintain: 1.2,
@@ -39,9 +29,10 @@ const GOAL_PROTEIN_PER_KG = {
   'General wellness': 1.2,
 };
 
+// Keep the target from going unrealistically low.
 const MINIMUM_CALORIE_FLOOR = 1200;
 
-// Checks that every profile field the formula needs is actually filled in.
+// Make sure the profile has everything needed before calculating.
 function hasRequiredFields(profile) {
   return Boolean(
     profile &&
@@ -64,6 +55,11 @@ export function calculateCalorieTarget(profile) {
 
   if (!hasRequiredFields(profile)) return null;
 
+  // Rough formula:
+  // BMR based on weight, height, age, and sex
+  // × activity factor
+  // + goal adjustment
+  // rounded to nearest 50 kcal
   const bmr =
     profile.sex === 'Male'
       ? 10 * profile.weight_kg + 6.25 * profile.height_cm - 5 * profile.age + 5
@@ -83,6 +79,9 @@ export function calculateCalorieTarget(profile) {
 export function calculateProteinTarget(profile) {
   if (!profile?.weight_kg || !profile?.goal) return null;
 
+  // Rough formula:
+  // body weight in kg × protein per kg for the goal
+  // rounded to nearest 5 g
   const gramsPerKg = GOAL_PROTEIN_PER_KG[profile.goal] ?? 1.2;
   const target = profile.weight_kg * gramsPerKg;
   return Math.round(target / 5) * 5;

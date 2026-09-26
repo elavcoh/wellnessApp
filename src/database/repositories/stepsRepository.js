@@ -1,10 +1,5 @@
 /**
- * stepsRepository.js
- *
- * Purpose: Reads and writes the daily step count in SQLite. One row per day.
- * Related to: used by MovementScreen.js (save today's steps from the
- * Pedometer, show recent history), wellnessContextBuilder.js, and
- * ProgressScreen.js (steps chart).
+ * Reads and saves daily step totals.
  */
 
 import { getDb } from '../db';

@@ -3,11 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
 /**
- * HomeScreen.js
- *
- * Purpose: The first tab. Shows a quick daily status (workout, breathing)
- * and links to Edit Profile and Notification Settings.
- * Related to: one of the 6 main tabs, defined in navigation/AppTabs.js.
+ * Home dashboard screen.
  */
 
 import { checkBackendHealth } from '../services/backendService';
@@ -77,11 +73,7 @@ export default function HomeScreen({ navigation }) {
         </Pressable>
       </View>
 
-      {/* This whole box is a leftover development/debug tool from early in
-          the project (checking whether the local backend server can be
-          reached) - it isn't part of the real product features, it's just
-          useful for confirming the backend is running before testing
-          Nutrition's photo analysis or the AI Coach. */}
+      {/* Debug button to test the backend connection - only visible in dev builds. */}
       <View style={styles.backendTest}>
         <Pressable style={styles.testButton} onPress={handleTestConnection}>
           <Text style={styles.testButtonText}>Test Backend Connection</Text>

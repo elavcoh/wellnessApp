@@ -1,11 +1,5 @@
 /**
- * mealsRepository.js
- *
- * Purpose: Reads and writes logged meals in SQLite (manual meals and
- * AI-analyzed meals both go through the same table).
- * Related to: used by NutritionScreen.js (add/delete/list meals),
- * wellnessContextBuilder.js (today's meals for the AI Coach), and
- * ProgressScreen.js (meal counts per day).
+ * Reads and saves meals in SQLite.
  */
 
 import { getDb } from '../db';

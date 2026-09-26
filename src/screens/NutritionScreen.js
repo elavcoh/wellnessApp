@@ -13,13 +13,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 
 /**
- * NutritionScreen.js
- *
- * Purpose: Log meals manually or by photo, review/edit AI-detected foods
- * and their estimated calories/protein, and see today's totals against the
- * calculated daily target.
- * Related to: one of the 6 main tabs. Uses aiService.js for photo analysis
- * and mealsRepository.js for storage.
+ * Meal logging and nutrition tracking screen.
  */
 
 import ChipSelector from '../components/ChipSelector';

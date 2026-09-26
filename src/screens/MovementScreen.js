@@ -3,12 +3,7 @@ import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, V
 import { useFocusEffect } from '@react-navigation/native';
 
 /**
- * MovementScreen.js
- *
- * Purpose: Shows today's step count and history from the Pedometer, and
- * lets the user generate a workout template and check off exercises.
- * Related to: one of the 6 main tabs. Uses stepService.js for the sensor
- * and workoutTemplates.js for the fixed workout plans.
+ * Movement and workout screen.
  */
 
 import StepProgressBar from '../components/StepProgressBar';
@@ -25,6 +20,12 @@ import { getProfile } from '../database/repositories/userProfileRepository';
 import { selectWorkoutTemplate } from '../constants/workoutTemplates';
 import { getTodayDateString } from '../utils/dateUtils';
 
+// This screen is the app's daily movement dashboard. It combines three pieces
+// of data: the device's step count, the user's saved step goal, and a
+// generated workout plan for the day. The screen is intentionally split into
+// browser-like "live UI" state (status, todaySteps, workout) and persistence
+// layer calls (saveTodaySteps, createWorkout, updateExercises) so the screen
+// always reflects both the current device reading and the stored historical data.
 export default function MovementScreen() {
   // status covers the Pedometer part of the screen only (the workout part
   // below always renders regardless of step status):

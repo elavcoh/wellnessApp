@@ -1,9 +1,5 @@
 /**
- * backendService.js
- *
- * Purpose: Simple check that the local backend server is reachable.
- * Related to: used by HomeScreen.js's "Test Backend Connection" button
- * (a diagnostic tool from early development).
+ * Checks whether the local backend is up.
  */
 
 import { API_BASE_URL } from '../constants/apiConfig';

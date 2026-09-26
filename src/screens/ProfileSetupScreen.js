@@ -1,12 +1,5 @@
 /**
- * ProfileSetupScreen.js
- *
- * Purpose: One form used for both first-time profile creation (onboarding)
- * and later editing. Also shows a live calorie/protein target preview, and
- * lets the user propose a custom calorie target that gets checked by the
- * AI Coach before it can be used.
- * Related to: reached from RootNavigator.js as "ProfileSetup" (new user)
- * or "ProfileEdit" (from HomeScreen.js).
+ * Profile form and target setup screen.
  */
 
 import { useEffect, useState } from 'react';
@@ -24,14 +17,9 @@ const LOCATION_OPTIONS = ['Home', 'Gym'];
 const SEX_OPTIONS = ['Male', 'Female'];
 
 export default function ProfileSetupScreen({ navigation, route }) {
-  // isEditing distinguishes the two ways this screen is opened:
-  //   false - first-time onboarding, comes from Welcome, "route" has no params
-  //   true  - opened as "Edit Profile" from Home, route.params.isEditing = true
-  // It controls the title text, whether we pre-fill the form, and where
-  // "Save" sends the user afterward (see handleSave).
   const isEditing = route?.params?.isEditing ?? false;
 
-  // --- One state variable per form field, all plain strings/values ---
+  // Form fields.
   const [age, setAge] = useState('');
   const [heightCm, setHeightCm] = useState('');
   const [weightKg, setWeightKg] = useState('');
@@ -46,24 +34,14 @@ export default function ProfileSetupScreen({ navigation, route }) {
   const [stepGoal, setStepGoal] = useState('');
   const [loading, setLoading] = useState(isEditing);
 
-  // --- Custom calorie target flow (propose a number, AI checks it, then confirm) ---
-  // confirmedOverride: the target that will actually be saved with the
-  // profile. null means "no custom target - just use the calculated one".
+  // Custom calorie target state.
   const [confirmedOverride, setConfirmedOverride] = useState(null);
-  // proposedOverride/overrideReason: what the user is currently typing into
-  // the "propose a different target" box, before it's checked or confirmed.
   const [proposedOverride, setProposedOverride] = useState('');
   const [overrideReason, setOverrideReason] = useState('');
-  // checkStatus tracks the "Check with AI Coach" flow:
-  //   idle       - nothing proposed/checked yet
-  //   checking   - waiting for the AI Coach's verdict
-  //   reasonable - AI thinks the proposed number is fine
-  //   caution    - AI thinks it looks off; user must tap "Use Anyway" to proceed
-  //   error      - the request to the backend failed
   const [checkStatus, setCheckStatus] = useState('idle');
   const [checkAnswer, setCheckAnswer] = useState(''); // the AI's explanation text, shown under the button
 
-  // When editing an existing profile, pre-fill the form with the saved values.
+  // Load saved profile when editing.
   useEffect(() => {
     if (!isEditing) return;
     getProfile().then((profile) => {
@@ -86,8 +64,7 @@ export default function ProfileSetupScreen({ navigation, route }) {
     });
   }, [isEditing]);
 
-  // Saves the whole form to SQLite, then either closes the edit screen or
-  // (for a new user) moves into the main app for the first time.
+  // Save profile and close or continue to app.
   async function handleSave() {
     await saveProfile({
       age: Number(age) || null,
@@ -115,9 +92,7 @@ export default function ProfileSetupScreen({ navigation, route }) {
     }
   }
 
-  // Draft profile built from the in-progress form (not yet saved) - used to
-  // show a live target preview and to send to the AI Coach for the "is my
-  // proposed target reasonable" check, without needing to save first.
+  // Live preview from current form values.
   const draftProfile = {
     age: Number(age) || null,
     height_cm: Number(heightCm) || null,
@@ -129,8 +104,7 @@ export default function ProfileSetupScreen({ navigation, route }) {
   const calculatedCalorieTarget = calculateCalorieTarget(draftProfile);
   const calculatedProteinTarget = calculateProteinTarget(draftProfile);
 
-  // Asks the AI Coach whether the user's proposed custom calorie target
-  // makes sense, and stores its verdict ("reasonable" or "caution").
+  // Ask the AI coach to review a custom calorie target.
   async function handleCheckOverride() {
     if (!proposedOverride.trim()) return; // nothing typed yet, don't bother asking
 
@@ -163,8 +137,7 @@ export default function ProfileSetupScreen({ navigation, route }) {
     }
   }
 
-  // Confirms the proposed target as the one to save (used for both the
-  // "reasonable" and the "caution → use anyway" paths).
+  // Confirm the custom target.
   function handleUseOverride() {
     setConfirmedOverride(Number(proposedOverride));
     setProposedOverride('');
@@ -173,7 +146,7 @@ export default function ProfileSetupScreen({ navigation, route }) {
     setCheckAnswer('');
   }
 
-  // Drops the custom target and goes back to using the calculated one.
+  // Remove the custom target and use the calculated one again.
   function handleRemoveOverride() {
     setConfirmedOverride(null);
   }

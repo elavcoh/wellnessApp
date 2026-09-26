@@ -7,6 +7,13 @@
  * drive the breathing timer/animation.
  */
 
+// These objects describe the breathing experiences displayed in the app. Each
+// session is not a free-form script; it is a timed pattern of inhale/hold/exhale
+// phases. The app uses the timing values here to animate the circle and to
+// track how long the user spent in an active breathing session. Keeping these
+// patterns in one file makes the logic in BreathingScreen.js easy to read: it
+// only needs to know "which pattern was selected" and then count down based on
+// the values in this file.
 // All hold phases are short (0-4 seconds) - safe, general wellness content,
 // not medical or extreme breath-holding.
 

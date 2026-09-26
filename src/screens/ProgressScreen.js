@@ -18,6 +18,10 @@ import { getRecentWorkouts } from '../database/repositories/workoutsRepository';
 import { getBreathingCountsByDate } from '../database/repositories/breathingRepository';
 import { getLastNDateStrings, getWeekdayLabel } from '../utils/dateUtils';
 
+// This screen is effectively a mini dashboard for the last 7 days. It does not
+// calculate anything new or make any recommendations; it only reads the existing
+// database, turns it into a simple day-by-day series, and visualizes that trend
+// so the user can quickly see patterns in steps, meals, workouts, and breathing.
 const DAYS = 7;
 
 export default function ProgressScreen() {

@@ -4,13 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 /**
- * RootNavigator.js
- *
- * Purpose: The top-level navigator. Decides whether to show onboarding
- * (Welcome + Profile Setup) or go straight to the main app, based on
- * whether a profile already exists. Also sets up the database and
- * notification schedules once at startup.
- * Related to: rendered by App.js. Owns the app's only NavigationContainer.
+ * Main app navigator.
  */
 
 import WelcomeScreen from '../screens/WelcomeScreen';

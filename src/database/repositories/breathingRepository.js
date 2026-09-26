@@ -1,11 +1,5 @@
 /**
- * breathingRepository.js
- *
- * Purpose: Reads and writes completed breathing sessions in SQLite. A row
- * is only ever created when a session finishes - canceling a session
- * writes nothing.
- * Related to: used by BreathingScreen.js, HomeScreen.js (breathing
- * status), wellnessContextBuilder.js, and ProgressScreen.js.
+ * Reads and saves completed breathing sessions.
  */
 
 import { getDb } from '../db';

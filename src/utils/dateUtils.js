@@ -1,10 +1,5 @@
 /**
- * dateUtils.js
- *
- * Purpose: Small helper functions for dates and times used across the app
- * (e.g. "today" as a string, formatting a list of recent days).
- * Related to: used by many screens and repositories that need to know
- * "today's date" or show the last few days.
+ * Date and time helpers.
  */
 
 // Returns today's date as "YYYY-MM-DD". Note: this uses UTC, so right
