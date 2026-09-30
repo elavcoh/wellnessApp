@@ -37,7 +37,7 @@ export default function ProfileSetupScreen({ navigation, route }) {
   // Custom calorie target state.
   const [confirmedOverride, setConfirmedOverride] = useState(null);
   const [proposedOverride, setProposedOverride] = useState('');
-  const [overrideReason, setOverrideReason] = useState('');
+  const [overrideReason, setOverrideReason] = useState(''); //For the AI context if needed
   const [checkStatus, setCheckStatus] = useState('idle');
   const [checkAnswer, setCheckAnswer] = useState(''); // the AI's explanation text, shown under the button
 
@@ -51,7 +51,7 @@ export default function ProfileSetupScreen({ navigation, route }) {
         setWeightKg(String(profile.weight_kg ?? ''));
         setSex(profile.sex ?? null);
         setConfirmedOverride(profile.calorie_target_override ?? null);
-        setGoal(profile.goal ?? GOAL_OPTIONS[0]);
+        setGoal(profile.goal ?? GOAL_OPTIONS[0]);// default to first option if not set
         setActivityLevel(profile.activity_level ?? ACTIVITY_LEVEL_OPTIONS[0]);
         setWorkoutExperience(profile.workout_experience ?? EXPERIENCE_OPTIONS[0]);
         setWorkoutDaysPerWeek(String(profile.workout_days_per_week ?? ''));
@@ -60,9 +60,9 @@ export default function ProfileSetupScreen({ navigation, route }) {
         setAvoidedFoods(profile.avoided_foods ?? '');
         setStepGoal(String(profile.step_goal ?? ''));
       }
-      setLoading(false);
+      setLoading(false);// done loading, show the form
     });
-  }, [isEditing]);
+  }, [isEditing]);// only run on mount
 
   // Save profile and close or continue to app.
   async function handleSave() {
@@ -94,14 +94,14 @@ export default function ProfileSetupScreen({ navigation, route }) {
 
   // Live preview from current form values.
   const draftProfile = {
-    age: Number(age) || null,
-    height_cm: Number(heightCm) || null,
+    age: Number(age) || null,// convert to number, or null if empty
+    height_cm: Number(heightCm) || null,//
     weight_kg: Number(weightKg) || null,
-    sex,
+    sex,// can be null if not selected
     goal,
     activity_level: activityLevel,
   };
-  const calculatedCalorieTarget = calculateCalorieTarget(draftProfile);
+  const calculatedCalorieTarget = calculateCalorieTarget(draftProfile);// null if not enough data yet
   const calculatedProteinTarget = calculateProteinTarget(draftProfile);
 
   // Ask the AI coach to review a custom calorie target.
@@ -120,18 +120,18 @@ export default function ProfileSetupScreen({ navigation, route }) {
       // A small, purpose-built context - not the full buildTodayContext(),
       // since during onboarding there's no "today" data yet, and this
       // question is only about the profile + the proposed number.
-      const context = {
-        profile: draftProfile,
-        nutrition_targets: calculatedCalorieTarget
+      const context = {// the AI Coach prompt expects these exact keys
+        profile: draftProfile,// the user's profile data, including age, height, weight, sex, goal, activity level
+        nutrition_targets: calculatedCalorieTarget//  the calculated target, if available, so the AI can compare it to the proposed one
           ? { estimated_calorie_target: calculatedCalorieTarget }
           : null,
       };
-      const result = await getWellnessAdvice(question, context);
-      setCheckAnswer(result.answer);
+      const result = await getWellnessAdvice(question, context);// returns { answer: string, target_assessment: 'reasonable' | 'caution' | 'not_applicable' }
+      setCheckAnswer(result.answer);// the AI's explanation text, shown under the button
       // Anything other than an explicit "reasonable" is treated as
       // "caution" (including the normal not_applicable default) - the
       // safer choice when we're not sure, since it just adds one extra tap.
-      setCheckStatus(result.target_assessment === 'reasonable' ? 'reasonable' : 'caution');
+      setCheckStatus(result.target_assessment === 'reasonable' ? 'reasonable' : 'caution');//
     } catch (error) {
       setCheckStatus('error');
     }
@@ -151,11 +151,11 @@ export default function ProfileSetupScreen({ navigation, route }) {
     setConfirmedOverride(null);
   }
 
-  if (loading) {
+  if (loading) {// still loading the profile from the database, show a spinner
     return <View style={styles.container} />;
   }
 
-  return (
+  return (// the main form
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>{isEditing ? 'Edit Profile' : 'Create Your Profile'}</Text>
 
@@ -304,7 +304,7 @@ export default function ProfileSetupScreen({ navigation, route }) {
         placeholder="e.g. 3"
       />
 
-      <ChipSelector
+      <ChipSelector  
         label="Training Location"
         options={LOCATION_OPTIONS}
         selected={trainingLocation}

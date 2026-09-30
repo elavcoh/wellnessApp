@@ -4,28 +4,28 @@
 
 import { getDb } from '../db';
 
-// Saves today's step count. Creates a new row for today, or updates the
-// existing one if MovementScreen already saved steps earlier today.
-export async function saveTodaySteps({ date, stepCount, stepGoalSnapshot, source }) {
+// Saves the step count for several days at once (from stepService.js's
+// 7-day sync). Each day gets a new row, or updates its existing row.
+// "ON CONFLICT(date) DO UPDATE" is SQLite's built-in insert-or-update: since
+// the date column is UNIQUE, inserting a date that already exists updates
+// that row instead. One transaction = one disk write for all the days.
+export async function saveDailySteps(days) {
   const db = await getDb();
   const now = new Date().toISOString();
-  // "SELECT id" (not "SELECT *") because we only need to know WHETHER a row
-  // for today exists, and if so, its id - we don't need any of its other
-  // columns just to decide between INSERT and UPDATE below.
-  const existing = await db.getFirstAsync('SELECT id FROM steps_daily WHERE date = ?;', [date]);
-
-  if (existing) {
-    await db.runAsync(
-      'UPDATE steps_daily SET step_count = ?, step_goal_snapshot = ?, source = ?, updated_at = ? WHERE id = ?;',
-      [stepCount, stepGoalSnapshot, source, now, existing.id]
-    );
-  } else {
-    await db.runAsync(
-      `INSERT INTO steps_daily (date, step_count, step_goal_snapshot, source, updated_at)
-       VALUES (?, ?, ?, ?, ?);`,
-      [date, stepCount, stepGoalSnapshot, source, now]
-    );
-  }
+  await db.withTransactionAsync(async () => {
+    for (const { date, stepCount, stepGoalSnapshot, source } of days) {
+      await db.runAsync(
+        `INSERT INTO steps_daily (date, step_count, step_goal_snapshot, source, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(date) DO UPDATE SET
+           step_count = excluded.step_count,
+           step_goal_snapshot = excluded.step_goal_snapshot,
+           source = excluded.source,
+           updated_at = excluded.updated_at;`,
+        [date, stepCount, stepGoalSnapshot, source, now]
+      );
+    }
+  });
 }
 
 // Returns the most recent step rows, newest first (up to `days` rows).
@@ -35,7 +35,7 @@ export async function getRecentSteps(days) {
 }
 
 // Returns the step row for one specific date, or undefined if none exists
-// (e.g. Movement was never opened that day - not the same as 0 steps).
+// (e.g. the app wasn't opened within 7 days of that date - not the same as 0 steps).
 export async function getStepsForDate(date) {
   const db = await getDb();
   return db.getFirstAsync('SELECT * FROM steps_daily WHERE date = ?;', [date]);

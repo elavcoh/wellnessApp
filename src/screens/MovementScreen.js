@@ -8,8 +8,8 @@ import { useFocusEffect } from '@react-navigation/native';
 
 import StepProgressBar from '../components/StepProgressBar';
 import ExerciseItem from '../components/ExerciseItem';
-import { getTodayStepCount } from '../services/stepService';
-import { getRecentSteps, saveTodaySteps } from '../database/repositories/stepsRepository';
+import { syncRecentSteps } from '../services/stepService';
+import { getRecentSteps } from '../database/repositories/stepsRepository';
 import {
   completeWorkout,
   createWorkout,
@@ -24,7 +24,7 @@ import { getTodayDateString } from '../utils/dateUtils';
 // of data: the device's step count, the user's saved step goal, and a
 // generated workout plan for the day. The screen is intentionally split into
 // browser-like "live UI" state (status, todaySteps, workout) and persistence
-// layer calls (saveTodaySteps, createWorkout, updateExercises) so the screen
+// layer calls (syncRecentSteps, createWorkout, updateExercises) so the screen
 // always reflects both the current device reading and the stored historical data.
 export default function MovementScreen() {
   // status covers the Pedometer part of the screen only (the workout part
@@ -41,16 +41,16 @@ export default function MovementScreen() {
   const [profile, setProfile] = useState(null); // needed for step goal + workout template choice
   const [workout, setWorkout] = useState(null); // today's workout, or null if none generated yet
 
-  // Reads today's steps from the Pedometer and saves them to SQLite. Runs
-  // whenever the screen is opened or the app comes back to the foreground -
-  // iOS does not let us reliably wake up in the background to do this.
+  // Syncs the last 7 days of steps from the Pedometer into SQLite (see
+  // stepService.js), then shows today's count + history. Runs whenever the
+  // screen is opened or the app comes back to the foreground - iOS does not
+  // let us reliably wake up in the background to do this.
   const refreshSteps = useCallback(async () => {
     const profileRow = await getProfile();
     setProfile(profileRow);
-    const goal = profileRow?.step_goal ?? null;
-    setStepGoal(goal);
+    setStepGoal(profileRow?.step_goal ?? null);
 
-    const result = await getTodayStepCount();
+    const result = await syncRecentSteps();
 
     if (!result.supported) {
       setStatus('unsupported');
@@ -60,13 +60,6 @@ export default function MovementScreen() {
       setStatus('denied');
       return;
     }
-
-    await saveTodaySteps({
-      date: getTodayDateString(),
-      stepCount: result.steps,
-      stepGoalSnapshot: goal,
-      source: 'pedometer',
-    });
 
     setTodaySteps(result.steps);
     setStatus('ok');

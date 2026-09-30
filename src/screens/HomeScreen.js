@@ -7,6 +7,7 @@ import { useFocusEffect } from '@react-navigation/native';
  */
 
 import { checkBackendHealth } from '../services/backendService';
+import { syncRecentSteps } from '../services/stepService';
 import { getWorkoutForDate } from '../database/repositories/workoutsRepository';
 import { getTodayCompletedSessions } from '../database/repositories/breathingRepository';
 import { getTodayDateString } from '../utils/dateUtils';
@@ -26,6 +27,7 @@ export default function HomeScreen({ navigation }) {
   const [connectionStatus, setConnectionStatus] = useState(null); // null | 'checking' | 'connected' | 'failed'
   const [workoutStatusLabel, setWorkoutStatusLabel] = useState(WORKOUT_STATUS_LABELS.not_started);
   const [breathingStatusLabel, setBreathingStatusLabel] = useState('No breathing session today');
+  const [stepsTodayLabel, setStepsTodayLabel] = useState('Checking steps...');
 
   // Every time this tab is opened, re-check today's workout and breathing
   // status - this is what keeps Home in sync after the user does something
@@ -43,6 +45,19 @@ export default function HomeScreen({ navigation }) {
           sessions.length > 0 ? 'Breathing completed' : 'No breathing session today'
         );
       });
+      // Also saves the last 7 days of steps to SQLite, so the step history
+      // stays complete even if the user never opens the Movement tab.
+      syncRecentSteps()
+        .then((result) => {
+          if (!result.supported) {
+            setStepsTodayLabel('Steps today unavailable');
+          } else if (!result.granted) {
+            setStepsTodayLabel('Steps today: permission needed');
+          } else {
+            setStepsTodayLabel(`Steps today: ${result.steps.toLocaleString()}`);
+          }
+        })
+        .catch(() => setStepsTodayLabel('Steps today unavailable'));
     }, [])
   );
 
@@ -56,6 +71,7 @@ export default function HomeScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Home</Text>
+      <Text style={styles.workoutStatus}>{stepsTodayLabel}</Text>
       <Text style={styles.workoutStatus}>{workoutStatusLabel}</Text>
       <Text style={styles.workoutStatus}>{breathingStatusLabel}</Text>
       <View style={styles.buttonRow}>
