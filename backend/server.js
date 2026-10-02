@@ -27,6 +27,7 @@ const cors = require('cors');
 // Each of these is one Express "router" - a small file that defines what
 // happens for requests to one specific URL path (see routes/ folder).
 const analyzeMealRoute = require('./routes/analyzeMeal');
+const analyzeMealTextRoute = require('./routes/analyzeMealText');
 const wellnessAdviceRoute = require('./routes/wellnessAdvice');
 
 const app = express();
@@ -49,10 +50,11 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Everything under /api/analyze-meal is handled by analyzeMealRoute, and
-// everything under /api/wellness-advice by wellnessAdviceRoute - Express
-// forwards the request to whichever router's path matches.
+// Each path below is handled by its own router (meal photo, typed meal
+// description, AI Coach) - Express forwards the request to whichever
+// router's path matches.
 app.use('/api/analyze-meal', analyzeMealRoute);
+app.use('/api/analyze-meal-text', analyzeMealTextRoute);
 app.use('/api/wellness-advice', wellnessAdviceRoute);
 
 // Starts the server listening for real network connections on PORT (3000

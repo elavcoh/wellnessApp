@@ -22,10 +22,22 @@ import DetectedFoodItem from '../components/DetectedFoodItem';
 import { addMeal, deleteMeal, getMealsForDate } from '../database/repositories/mealsRepository';
 import { getProfile } from '../database/repositories/userProfileRepository';
 import { getCurrentTimeString, getTodayDateString } from '../utils/dateUtils';
-import { analyzeMealPhoto } from '../services/aiService';
+import { analyzeMealPhoto, analyzeMealText } from '../services/aiService';
 import { calculateCalorieTarget, calculateProteinTarget } from '../services/nutritionTargets';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
+
+// Turns what the user typed into a calories/protein field into a whole
+// number, or null if it's empty or not a valid number of 0 or more.
+// 0 is a real value here (black coffee, an apple's protein) - not "empty".
+// Accepts "12,5" too, since some phone keyboards type a comma for decimals.
+function parseNutritionValue(text) {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  const value = Number(trimmed.replace(',', '.'));
+  if (!Number.isFinite(value) || value < 0) return null;
+  return Math.round(value);
+}
 
 export default function NutritionScreen() {
   // --- The "new meal" form fields (what the user is currently filling in) ---
@@ -34,13 +46,16 @@ export default function NutritionScreen() {
   const [photoUri, setPhotoUri] = useState(null); // local file path of the chosen/taken photo, or null
   const [meals, setMeals] = useState([]); // today's already-saved meals, shown in the list below
 
-  // --- AI photo-analysis state (all reset together by resetAnalysis()) ---
+  // --- AI analysis state (all reset together by resetAnalysis()) ---
+  // Shared by both AI flows: "Analyze with AI" for a photo, and "Estimate
+  // with AI" for a typed description. Only one can be on screen at a time -
+  // the text button is hidden while a photo is attached.
   const [photoMimeType, setPhotoMimeType] = useState(null); // needed so the backend knows the real image format (see handleChooseFromLibrary)
-  // analysisStatus tracks where we are in the "Analyze with AI" flow:
-  //   idle     - no analysis run yet for the current photo
+  // analysisStatus tracks where we are in either AI flow:
+  //   idle     - no analysis run yet for the current photo/description
   //   loading  - waiting for the backend/AI to respond
   //   done     - got a real food result back, showing the review box
-  //   not_food - the AI decided the photo isn't food at all
+  //   not_food - the AI decided the photo/text isn't food at all
   //   error    - the request failed (network/backend down)
   const [analysisStatus, setAnalysisStatus] = useState('idle');
   const [detectedFoods, setDetectedFoods] = useState([]); // array of {name, portion_description, category, estimated_calories, ...}
@@ -57,6 +72,10 @@ export default function NutritionScreen() {
   const [caloriesManuallyEdited, setCaloriesManuallyEdited] = useState(false);
   const [proteinInput, setProteinInput] = useState('');
   const [proteinManuallyEdited, setProteinManuallyEdited] = useState(false);
+
+  // Message shown above "Add Meal" when the meal can't be saved yet (e.g.
+  // calories missing). Cleared as soon as the user changes the form.
+  const [saveError, setSaveError] = useState('');
 
   // The user's profile, needed only to calculate the calorie/protein
   // targets shown in the summary card below (see calculateCalorieTarget).
@@ -141,6 +160,43 @@ export default function NutritionScreen() {
     resetAnalysis();
   }
 
+  // Puts an AI result (from a photo or a typed description - both have the
+  // same shape) into the review box and the calorie/protein fields.
+  // Nothing is saved here; the user still has to press "Add Meal".
+  //   overwriteValues - true when the user explicitly asked for a new
+  //   estimate of their typed text, so it should replace whatever is in
+  //   the fields. The photo flow passes false and keeps the user's own
+  //   typed numbers, as before.
+  function applyAnalysisResult(result, { overwriteValues }) {
+    // The AI decided this isn't food at all (e.g. a screenshot, or text
+    // like "my car") - show the "not a meal" message instead of
+    // pretending it found something.
+    if (!result.is_food) {
+      setDetectedFoods([]);
+      setAnalysisStatus('not_food');
+      return;
+    }
+
+    setDetectedFoods(result.foods);
+    setAiSummary(result.meal_summary);
+    setAiObservation(result.general_observation);
+    setAnalysisStatus('done');
+    setSaveError('');
+    // Only fill the description if the user hasn't typed their own -
+    // never overwrite something they already wrote.
+    if (!description.trim()) {
+      setDescription(result.meal_summary);
+    }
+    if (overwriteValues || !caloriesManuallyEdited) {
+      setCaloriesInput(String(result.total_estimated_calories));
+      setCaloriesManuallyEdited(false);
+    }
+    if (overwriteValues || !proteinManuallyEdited) {
+      setProteinInput(String(result.total_estimated_protein_g));
+      setProteinManuallyEdited(false);
+    }
+  }
+
   // Sends the photo to the backend for AI analysis and fills in the
   // detected foods, calories and protein (unless the user already typed
   // their own values).
@@ -148,31 +204,21 @@ export default function NutritionScreen() {
     setAnalysisStatus('loading');
     try {
       const result = await analyzeMealPhoto(photoUri, photoMimeType);
+      applyAnalysisResult(result, { overwriteValues: false });
+    } catch (error) {
+      setAnalysisStatus('error');
+    }
+  }
 
-      // The AI checked the photo and decided it isn't food at all (e.g. a
-      // screenshot or a person) - show the "not a meal photo" message
-      // instead of pretending it found something.
-      if (!result.is_food) {
-        setDetectedFoods([]);
-        setAnalysisStatus('not_food');
-        return;
-      }
-
-      setDetectedFoods(result.foods);
-      setAiSummary(result.meal_summary);
-      setAiObservation(result.general_observation);
-      setAnalysisStatus('done');
-      // Only fill the description if the user hasn't typed their own -
-      // never overwrite something they already wrote.
-      if (!description.trim()) {
-        setDescription(result.meal_summary);
-      }
-      if (!caloriesManuallyEdited) {
-        setCaloriesInput(String(result.total_estimated_calories));
-      }
-      if (!proteinManuallyEdited) {
-        setProteinInput(String(result.total_estimated_protein_g));
-      }
+  // Sends the typed description to the backend for an AI estimate and
+  // fills in the calories and protein. The user can still edit them, and
+  // nothing is saved until they press "Add Meal".
+  async function handleEstimateWithAI() {
+    if (!description.trim()) return; // button is disabled in this case anyway
+    setAnalysisStatus('loading');
+    try {
+      const result = await analyzeMealText(description.trim());
+      applyAnalysisResult(result, { overwriteValues: true });
     } catch (error) {
       setAnalysisStatus('error');
     }
@@ -204,20 +250,47 @@ export default function NutritionScreen() {
   // These fire whenever the user types into the calories/protein fields.
   // Marking "manually edited" is what stops handleAnalyzeWithAI and
   // handleRemoveDetectedFood from overwriting the user's own number later.
+  // Any change to the form also clears an old "can't save yet" message.
+  function handleDescriptionChange(text) {
+    setDescription(text);
+    setSaveError('');
+  }
+
   function handleCaloriesChange(text) {
     setCaloriesInput(text);
     setCaloriesManuallyEdited(true);
+    setSaveError('');
   }
 
   function handleProteinChange(text) {
     setProteinInput(text);
     setProteinManuallyEdited(true);
+    setSaveError('');
   }
 
   // Saves the meal to SQLite. This is the only place the meal is actually
   // stored - nothing is saved just from taking a photo or analyzing it.
+  // Description, calories and protein are all required: a meal without
+  // numbers would silently count as 0 in today's totals and the AI Coach.
   async function handleAddMeal() {
-    if (!description.trim()) return; // description is the one required field
+    if (!description.trim()) {
+      setSaveError('Describe what you ate before saving.');
+      return;
+    }
+
+    const calories = parseNutritionValue(caloriesInput);
+    const protein = parseNutritionValue(proteinInput);
+    if (!caloriesInput.trim() || !proteinInput.trim()) {
+      setSaveError(
+        'Add calories and protein before saving. Type them in, or use Estimate with AI. ' +
+          'Meals without these values make your daily totals inaccurate.'
+      );
+      return;
+    }
+    if (calories === null || protein === null) {
+      setSaveError('Calories and protein must be numbers (0 or more).');
+      return;
+    }
 
     // Only attach the AI result JSON if analysis actually finished
     // successfully (status "done") - a manual meal, or one where analysis
@@ -238,9 +311,10 @@ export default function NutritionScreen() {
       time: getCurrentTimeString(),
       photoUri,
       detectedFoodsJson,
-      estimatedCalories: Number(caloriesInput) || null,
-      estimatedProteinG: Number(proteinInput) || null,
+      estimatedCalories: calories,
+      estimatedProteinG: protein,
     });
+    setSaveError('');
     setDescription('');
     setPhotoUri(null);
     setPhotoMimeType(null);
@@ -268,6 +342,10 @@ export default function NutritionScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Nutrition</Text>
+
+      <View style={styles.aiBanner}>
+        <Text style={styles.aiBannerText}>AI estimates are approximate. Review before saving.</Text>
+      </View>
 
       {/* Two versions of the summary card: a full target/logged/remaining
           view once we can calculate a target, or a simpler "just show what
@@ -317,16 +395,53 @@ export default function NutritionScreen() {
       <TextInput
         style={styles.input}
         value={description}
-        onChangeText={setDescription}
+        onChangeText={handleDescriptionChange}
         placeholder="What did you eat?"
       />
+
+      {/* "Estimate with AI" for a typed meal. Hidden while a photo is
+          attached - the photo has its own "Analyze with AI" button below,
+          and showing both would be confusing. */}
+      {!photoUri && (
+        <View style={styles.textEstimateWrapper}>
+          <Text style={styles.hintText}>Include portion size for a better estimate.</Text>
+          <Pressable
+            style={[
+              styles.analyzeButton,
+              (!description.trim() || analysisStatus === 'loading') && styles.buttonDisabled,
+            ]}
+            onPress={handleEstimateWithAI}
+            disabled={!description.trim() || analysisStatus === 'loading'}
+          >
+            {analysisStatus === 'loading' ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.analyzeButtonText}>
+                {analysisStatus === 'done' ? 'Estimate again' : 'Estimate with AI'}
+              </Text>
+            )}
+          </Pressable>
+
+          {analysisStatus === 'error' && (
+            <Text style={styles.errorText}>
+              Couldn't estimate this meal. Check that the backend is running, then try again.
+            </Text>
+          )}
+
+          {analysisStatus === 'not_food' && (
+            <Text style={styles.errorText}>
+              This doesn't look like a meal description. Describe what you ate and try again.
+            </Text>
+          )}
+        </View>
+      )}
 
       <TextInput
         style={styles.input}
         value={caloriesInput}
         onChangeText={handleCaloriesChange}
         keyboardType="numeric"
-        placeholder="Estimated calories (optional)"
+        placeholder="Estimated calories"
       />
 
       <TextInput
@@ -334,7 +449,7 @@ export default function NutritionScreen() {
         value={proteinInput}
         onChangeText={handleProteinChange}
         keyboardType="numeric"
-        placeholder="Estimated protein, grams (optional)"
+        placeholder="Estimated protein, grams"
       />
 
       <View style={styles.photoButtonRow}>
@@ -401,6 +516,8 @@ export default function NutritionScreen() {
           )}
         </View>
       )}
+
+      {saveError ? <Text style={styles.saveErrorText}>{saveError}</Text> : null}
 
       <Pressable style={styles.addButton} onPress={handleAddMeal}>
         <Text style={styles.addButtonText}>Add Meal</Text>
@@ -521,6 +638,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 8,
     marginTop: 10,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
+  },
+  textEstimateWrapper: {
+    alignItems: 'center',
+    marginTop: -4,
+    marginBottom: 14,
+  },
+  hintText: {
+    fontSize: 12,
+    color: '#888',
+  },
+  aiBanner: {
+    backgroundColor: '#fff8e1',
+    borderWidth: 1,
+    borderColor: '#f0d58a',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  aiBannerText: {
+    fontSize: 13,
+    color: '#7a5b00',
+  },
+  saveErrorText: {
+    color: '#c0392b',
+    fontSize: 13,
+    marginBottom: 8,
   },
   analyzeButtonText: {
     color: '#fff',

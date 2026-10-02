@@ -26,6 +26,23 @@ export async function analyzeMealPhoto(photoUri, mimeType) {
   return response.json();
 }
 
+// Sends a typed meal description to the backend and returns the parsed AI
+// result - same shape as analyzeMealPhoto(), so the Nutrition screen can
+// handle both the same way.
+export async function analyzeMealText(description) {
+  const response = await fetch(`${API_BASE_URL}/api/analyze-meal-text`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ description }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Meal text analysis request failed');
+  }
+
+  return response.json();
+}
+
 // Sends a user question plus today's wellness data to the AI coach.
 export async function getWellnessAdvice(question, context) {
   const response = await fetch(`${API_BASE_URL}/api/wellness-advice`, {

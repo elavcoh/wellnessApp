@@ -22,7 +22,8 @@ export default function MealListItem({ meal, onDelete }) {
         <Text style={styles.mealType}>
           {meal.meal_type}
           {/* "· AI" only appears if this meal was saved with a confirmed AI
-              photo analysis - detected_foods_json is null for manual meals. */}
+              analysis (photo or typed description) - detected_foods_json is
+              null for meals whose values were typed in by hand. */}
           {meal.detected_foods_json ? ' · AI' : ''}
         </Text>
         <Text style={styles.description}>{meal.description}</Text>

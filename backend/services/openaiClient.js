@@ -1,11 +1,12 @@
 /**
  * services/openaiClient.js
  *
- * Purpose: The only file that calls the OpenAI API. Holds both AI
- * features' prompts and structured-output schemas: meal photo analysis,
- * and the AI Coach (which is restricted to wellness topics only, enforced
- * both in the prompt and again in code).
- * Related to: called by routes/analyzeMeal.js and routes/wellnessAdvice.js.
+ * Purpose: The only file that calls the OpenAI API. Holds every AI
+ * feature's prompts and structured-output schemas: meal photo analysis,
+ * typed meal description analysis, and the AI Coach (which is restricted
+ * to wellness topics only, enforced both in the prompt and again in code).
+ * Related to: called by routes/analyzeMeal.js, routes/analyzeMealText.js
+ * and routes/wellnessAdvice.js.
  */
 
 // "openai" is the official Node.js library for calling OpenAI's API - it
@@ -127,6 +128,40 @@ async function analyzeMealImage(base64Image, mimeType) {
   return JSON.parse(response.output_text);
 }
 
+// Same job as SYSTEM_PROMPT above, but for a meal the user typed instead of
+// photographed. The answer uses the exact same MEAL_ANALYSIS_SCHEMA, so the
+// app can show it in the same review box the photo flow already uses.
+const TEXT_SYSTEM_PROMPT = `You are a wellness app assistant that reads a short meal description typed by the user and estimates its nutrition.
+- First decide whether the text actually describes food or drink that was eaten. Set is_food to true or false.
+- If is_food is false (e.g. the text is unrelated to food, or is gibberish): foods must be an empty array, all totals must be 0, meal_summary should briefly state no food was described, and general_observation should briefly say why. Never invent food items.
+- If is_food is true: split the description into its individual foods and give a best-effort APPROXIMATE calorie and macronutrient (protein/carbs/fat) estimate for each, as whole numbers. If the user gave amounts (e.g. "200g chicken", "2 slices"), use them and repeat them in portion_description. If not, assume one typical medium serving and say so in portion_description. Do not refuse or ask questions because details are missing; give your best reasonable guess. Never claim or imply the numbers are exact or medical-grade. Use general_observation to briefly mention the main assumption you made (e.g. portion size or cooking method), if any.
+- total_estimated_calories/protein/carbs/fat must equal the sum of the per-food values.
+- Do not give medical or dietary treatment advice. This is general wellness guidance only.`;
+
+// Sends one typed meal description to OpenAI and returns the structured
+// JSON result - same shape as analyzeMealImage(), always following
+// MEAL_ANALYSIS_SCHEMA.
+async function analyzeMealDescription(description) {
+  const response = await client.responses.create({
+    model: MODEL,
+    // Plain text only this time - no image, just the user's description.
+    input: [
+      { role: 'system', content: TEXT_SYSTEM_PROMPT },
+      { role: 'user', content: `Meal description: ${description}` },
+    ],
+    text: {
+      format: {
+        type: 'json_schema',
+        name: 'meal_analysis',
+        schema: MEAL_ANALYSIS_SCHEMA,
+        strict: true,
+      },
+    },
+  });
+
+  return JSON.parse(response.output_text);
+}
+
 // The exact wording shown for any out-of-scope question. Kept as one
 // constant so it's used identically in the prompt (telling the model what
 // to say) and in code (forcing it, in case the model doesn't comply).
@@ -237,4 +272,4 @@ async function getWellnessAdvice(question, context) {
   return result;
 }
 
-module.exports = { analyzeMealImage, getWellnessAdvice };
+module.exports = { analyzeMealImage, analyzeMealDescription, getWellnessAdvice };
