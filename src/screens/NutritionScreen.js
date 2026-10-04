@@ -64,6 +64,11 @@ export default function NutritionScreen() {
   const [detectedFoods, setDetectedFoods] = useState([]); // array of {name, portion_description, category, estimated_calories, ...}
   const [aiSummary, setAiSummary] = useState(''); // AI's one-line meal description, used to prefill "description" if it's empty
   const [aiObservation, setAiObservation] = useState(''); // AI's free-text note, shown in the review box
+  // Numbers each AI request. Bumped when a request starts and whenever the
+  // form moves on (new/removed photo, Add Meal), so an answer that arrives
+  // late can tell it's out of date and be ignored instead of refilling the
+  // form with the old meal's numbers and foods.
+  const analysisRequestRef = useRef(0);
 
   // --- Estimated calories/protein for the meal being added ---
   // These work the same way for both AI-analyzed and purely manual meals.
@@ -117,6 +122,7 @@ export default function NutritionScreen() {
   // calorie/protein inputs - those belong to the meal being built, not to
   // one specific photo analysis attempt.
   function resetAnalysis() {
+    analysisRequestRef.current += 1; // drop any answer still on its way
     setAnalysisStatus('idle');
     setDetectedFoods([]);
     setAiSummary('');
@@ -211,11 +217,14 @@ export default function NutritionScreen() {
   // detected foods, calories and protein (unless the user already typed
   // their own values).
   async function handleAnalyzeWithAI() {
+    const requestId = ++analysisRequestRef.current;
     setAnalysisStatus('loading');
     try {
       const result = await analyzeMealPhoto(photoUri, photoMimeType);
+      if (requestId !== analysisRequestRef.current) return; // form moved on
       applyAnalysisResult(result, { overwriteValues: false });
     } catch (error) {
+      if (requestId !== analysisRequestRef.current) return;
       setAnalysisStatus('error');
     }
   }
@@ -225,11 +234,14 @@ export default function NutritionScreen() {
   // nothing is saved until they press "Add Meal".
   async function handleEstimateWithAI() {
     if (!description.trim()) return; // button is disabled in this case anyway
+    const requestId = ++analysisRequestRef.current;
     setAnalysisStatus('loading');
     try {
       const result = await analyzeMealText(description.trim());
+      if (requestId !== analysisRequestRef.current) return; // form moved on
       applyAnalysisResult(result, { overwriteValues: true });
     } catch (error) {
+      if (requestId !== analysisRequestRef.current) return;
       setAnalysisStatus('error');
     }
   }
@@ -314,6 +326,12 @@ export default function NutritionScreen() {
             general_observation: aiObservation,
           })
         : null;
+
+    // An estimate still loading belongs to the meal being saved now - drop
+    // it so it can't refill the cleared form afterwards.
+    if (analysisStatus === 'loading') {
+      resetAnalysis();
+    }
 
     savingRef.current = true;
     setIsSaving(true);
