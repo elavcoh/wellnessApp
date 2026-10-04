@@ -89,15 +89,9 @@ export async function initDatabase() {
     );
   `);
 
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS notification_settings (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      meal_reminders_enabled INTEGER NOT NULL DEFAULT 0,
-      movement_reminders_enabled INTEGER NOT NULL DEFAULT 0,
-      evening_summary_enabled INTEGER NOT NULL DEFAULT 0,
-      updated_at TEXT NOT NULL
-    );
-  `);
+  // Notifications were removed from the app - drop the old settings table
+  // left behind on devices that had an earlier version installed.
+  await db.execAsync('DROP TABLE IF EXISTS notification_settings;');
 }
 
 // Adds a column to an existing table if it isn't there yet. Needed because

@@ -9,12 +9,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import WelcomeScreen from '../screens/WelcomeScreen';
 import ProfileSetupScreen from '../screens/ProfileSetupScreen';
-import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
 import AppTabs from './AppTabs';
 import { initDatabase } from '../database/schema';
 import { getProfile } from '../database/repositories/userProfileRepository';
-import { getNotificationSettings } from '../database/repositories/notificationSettingsRepository';
-import { syncScheduledNotifications } from '../services/notificationService';
 
 // createNativeStackNavigator gives us a "stack" of screens where opening a
 // new one visually slides in on top, and going back slides it back off -
@@ -32,8 +29,7 @@ export default function RootNavigator() {
   const [startupAttempt, setStartupAttempt] = useState(0);
 
   // Runs when the app starts (and again on "Try Again"): creates the
-  // database tables, checks if a profile already exists, and re-applies any
-  // saved notification schedules.
+  // database tables and checks if a profile already exists.
   useEffect(() => {
     async function checkProfile() {
       try {
@@ -42,17 +38,6 @@ export default function RootNavigator() {
         setHasProfile(profile !== null);
       } catch (error) {
         setStartupFailed(true);
-        return;
-      }
-
-      // Re-apply saved reminder schedules on every cold start, so they stay
-      // correct even if iOS ever clears pending notifications. A failure
-      // here only affects reminders, so it doesn't stop the app opening.
-      try {
-        const notificationSettings = await getNotificationSettings();
-        await syncScheduledNotifications(notificationSettings);
-      } catch (error) {
-        // Reminders will be re-applied next time the app starts.
       }
     }
     checkProfile();
@@ -101,9 +86,9 @@ export default function RootNavigator() {
           returning user skips straight to "MainTabs".
           screenOptions={{ headerShown: false }} turns off the default
           top header bar for every screen in this stack UNLESS a specific
-          screen below overrides it with its own "options" (see ProfileEdit
-          and NotificationSettings, which both turn the header back on so
-          they get a title and a back button). */}
+          screen below overrides it with its own "options" (see ProfileEdit,
+          which turns the header back on so it gets a title and a back
+          button). */}
       <Stack.Navigator
         initialRouteName={hasProfile ? 'MainTabs' : 'Welcome'}
         screenOptions={{ headerShown: false }}
@@ -121,11 +106,6 @@ export default function RootNavigator() {
           component={ProfileSetupScreen}
           initialParams={{ isEditing: true }}
           options={{ headerShown: true, title: 'Edit Profile' }}
-        />
-        <Stack.Screen
-          name="NotificationSettings"
-          component={NotificationSettingsScreen}
-          options={{ headerShown: true, title: 'Notifications' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

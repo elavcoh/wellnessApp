@@ -81,12 +81,6 @@ export default function HomeScreen({ navigation }) {
         >
           <Text style={styles.editButtonText}>Edit Profile</Text>
         </Pressable>
-        <Pressable
-          style={styles.editButton}
-          onPress={() => navigation.navigate('NotificationSettings')}
-        >
-          <Text style={styles.editButtonText}>Notification Settings</Text>
-        </Pressable>
       </View>
 
       {/* Debug button to test the backend connection - only visible in dev builds. */}
