@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -339,212 +341,228 @@ export default function NutritionScreen() {
   const calorieTarget = calculateCalorieTarget(profile);
   const proteinTarget = calculateProteinTarget(profile);
 
+  // The form + meal list is taller than the screen, so it all lives in one
+  // ScrollView. KeyboardAvoidingView pushes it up so the keyboard doesn't
+  // cover the field being typed in; keyboardShouldPersistTaps lets a tap on
+  // a button work on the first tap even while the keyboard is open.
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Nutrition</Text>
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
+        <Text style={styles.title}>Nutrition</Text>
 
-      <View style={styles.aiBanner}>
-        <Text style={styles.aiBannerText}>AI estimates are approximate. Review before saving.</Text>
-      </View>
-
-      {/* Two versions of the summary card: a full target/logged/remaining
-          view once we can calculate a target, or a simpler "just show what
-          was logged" view when the profile doesn't have enough data yet. */}
-      <View style={styles.summaryCard}>
-        {calorieTarget ? (
-          <>
-            <View style={styles.summaryRow}>
-              <View>
-                <Text style={styles.summaryLabel}>Estimated daily target</Text>
-                <Text style={styles.summaryValue}>~{calorieTarget.toLocaleString()} kcal</Text>
-              </View>
-              <View>
-                <Text style={styles.summaryLabel}>Logged today</Text>
-                <Text style={styles.summaryValue}>~{totalCaloriesToday.toLocaleString()} kcal</Text>
-              </View>
-              <View>
-                <Text style={styles.summaryLabel}>Remaining</Text>
-                <Text style={styles.summaryValue}>
-                  ~{(calorieTarget - totalCaloriesToday).toLocaleString()} kcal
-                </Text>
-              </View>
-            </View>
-            {proteinTarget && (
-              <Text style={styles.summarySubtext}>
-                Estimated protein: ~{totalProteinToday}g / target ~{proteinTarget}g
-              </Text>
-            )}
-          </>
-        ) : (
-          <>
-            <Text style={styles.summaryLabel}>Estimated calories logged today</Text>
-            <Text style={styles.summaryValue}>~{totalCaloriesToday.toLocaleString()} kcal</Text>
-            <Text style={styles.summarySubtext}>
-              Add your sex, age, height, weight and activity level in your profile to see a daily
-              target.
-            </Text>
-          </>
-        )}
-        <Text style={styles.summarySubtext}>
-          {meals.length} meal{meals.length === 1 ? '' : 's'} logged · estimates only
-        </Text>
-      </View>
-
-      <ChipSelector label="Meal Type" options={MEAL_TYPES} selected={mealType} onSelect={setMealType} />
-
-      <TextInput
-        style={styles.input}
-        value={description}
-        onChangeText={handleDescriptionChange}
-        placeholder="What did you eat?"
-      />
-
-      {/* "Estimate with AI" for a typed meal. Hidden while a photo is
-          attached - the photo has its own "Analyze with AI" button below,
-          and showing both would be confusing. */}
-      {!photoUri && (
-        <View style={styles.textEstimateWrapper}>
-          <Text style={styles.hintText}>Include portion size for a better estimate.</Text>
-          <Pressable
-            style={[
-              styles.analyzeButton,
-              (!description.trim() || analysisStatus === 'loading') && styles.buttonDisabled,
-            ]}
-            onPress={handleEstimateWithAI}
-            disabled={!description.trim() || analysisStatus === 'loading'}
-          >
-            {analysisStatus === 'loading' ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.analyzeButtonText}>
-                {analysisStatus === 'done' ? 'Estimate again' : 'Estimate with AI'}
-              </Text>
-            )}
-          </Pressable>
-
-          {analysisStatus === 'error' && (
-            <Text style={styles.errorText}>
-              Couldn't estimate this meal. Check that the backend is running, then try again.
-            </Text>
-          )}
-
-          {analysisStatus === 'not_food' && (
-            <Text style={styles.errorText}>
-              This doesn't look like a meal description. Describe what you ate and try again.
-            </Text>
-          )}
+        <View style={styles.aiBanner}>
+          <Text style={styles.aiBannerText}>AI estimates are approximate. Review before saving.</Text>
         </View>
-      )}
 
-      <TextInput
-        style={styles.input}
-        value={caloriesInput}
-        onChangeText={handleCaloriesChange}
-        keyboardType="numeric"
-        placeholder="Estimated calories"
-      />
+        {/* Two versions of the summary card: a full target/logged/remaining
+            view once we can calculate a target, or a simpler "just show what
+            was logged" view when the profile doesn't have enough data yet. */}
+        <View style={styles.summaryCard}>
+          {calorieTarget ? (
+            <>
+              <View style={styles.summaryRow}>
+                <View>
+                  <Text style={styles.summaryLabel}>Estimated daily target</Text>
+                  <Text style={styles.summaryValue}>~{calorieTarget.toLocaleString()} kcal</Text>
+                </View>
+                <View>
+                  <Text style={styles.summaryLabel}>Logged today</Text>
+                  <Text style={styles.summaryValue}>~{totalCaloriesToday.toLocaleString()} kcal</Text>
+                </View>
+                <View>
+                  <Text style={styles.summaryLabel}>Remaining</Text>
+                  <Text style={styles.summaryValue}>
+                    ~{(calorieTarget - totalCaloriesToday).toLocaleString()} kcal
+                  </Text>
+                </View>
+              </View>
+              {proteinTarget && (
+                <Text style={styles.summarySubtext}>
+                  Estimated protein: ~{totalProteinToday}g / target ~{proteinTarget}g
+                </Text>
+              )}
+            </>
+          ) : (
+            <>
+              <Text style={styles.summaryLabel}>Estimated calories logged today</Text>
+              <Text style={styles.summaryValue}>~{totalCaloriesToday.toLocaleString()} kcal</Text>
+              <Text style={styles.summarySubtext}>
+                Add your sex, age, height, weight and activity level in your profile to see a daily
+                target.
+              </Text>
+            </>
+          )}
+          <Text style={styles.summarySubtext}>
+            {meals.length} meal{meals.length === 1 ? '' : 's'} logged · estimates only
+          </Text>
+        </View>
 
-      <TextInput
-        style={styles.input}
-        value={proteinInput}
-        onChangeText={handleProteinChange}
-        keyboardType="numeric"
-        placeholder="Estimated protein, grams"
-      />
+        <ChipSelector label="Meal Type" options={MEAL_TYPES} selected={mealType} onSelect={setMealType} />
 
-      <View style={styles.photoButtonRow}>
-        <Pressable style={styles.photoButton} onPress={handleTakePhoto}>
-          <Text style={styles.photoButtonText}>Take Photo</Text>
-        </Pressable>
-        <Pressable style={styles.photoButton} onPress={handleChooseFromLibrary}>
-          <Text style={styles.photoButtonText}>Choose from Library</Text>
-        </Pressable>
-      </View>
+        <TextInput
+          style={styles.input}
+          value={description}
+          onChangeText={handleDescriptionChange}
+          placeholder="What did you eat?"
+        />
 
-      {/* Photo preview + "Analyze with AI" only shows once a photo exists.
-          The Analyze button itself is hidden once analysisStatus is "done"
-          (nothing left to analyze until a new photo is picked). */}
-      {photoUri ? (
-        <View style={styles.previewWrapper}>
-          <Image source={{ uri: photoUri }} style={styles.previewImage} />
-          <Pressable onPress={handleRemovePhoto}>
-            <Text style={styles.removePhotoText}>Remove photo</Text>
-          </Pressable>
-
-          {analysisStatus !== 'done' && (
-            <Pressable style={styles.analyzeButton} onPress={handleAnalyzeWithAI} disabled={analysisStatus === 'loading'}>
+        {/* "Estimate with AI" for a typed meal. Hidden while a photo is
+            attached - the photo has its own "Analyze with AI" button below,
+            and showing both would be confusing. */}
+        {!photoUri && (
+          <View style={styles.textEstimateWrapper}>
+            <Text style={styles.hintText}>Include portion size for a better estimate.</Text>
+            <Pressable
+              style={[
+                styles.analyzeButton,
+                (!description.trim() || analysisStatus === 'loading') && styles.buttonDisabled,
+              ]}
+              onPress={handleEstimateWithAI}
+              disabled={!description.trim() || analysisStatus === 'loading'}
+            >
               {analysisStatus === 'loading' ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.analyzeButtonText}>Analyze with AI</Text>
+                <Text style={styles.analyzeButtonText}>
+                  {analysisStatus === 'done' ? 'Estimate again' : 'Estimate with AI'}
+                </Text>
               )}
             </Pressable>
-          )}
 
-          {analysisStatus === 'error' && (
-            <Text style={styles.errorText}>
-              Couldn't analyze this photo. Check that the backend is running, then try again.
-            </Text>
-          )}
+            {analysisStatus === 'error' && (
+              <Text style={styles.errorText}>
+                Couldn't estimate this meal. Check that the backend is running, then try again.
+              </Text>
+            )}
 
-          {analysisStatus === 'not_food' && (
-            <Text style={styles.errorText}>
-              This image doesn't appear to contain food. Please choose or take a meal photo.
-            </Text>
-          )}
+            {analysisStatus === 'not_food' && (
+              <Text style={styles.errorText}>
+                This doesn't look like a meal description. Describe what you ate and try again.
+              </Text>
+            )}
+          </View>
+        )}
+
+        <TextInput
+          style={styles.input}
+          value={caloriesInput}
+          onChangeText={handleCaloriesChange}
+          keyboardType="numeric"
+          placeholder="Estimated calories"
+        />
+
+        <TextInput
+          style={styles.input}
+          value={proteinInput}
+          onChangeText={handleProteinChange}
+          keyboardType="numeric"
+          placeholder="Estimated protein, grams"
+        />
+
+        <View style={styles.photoButtonRow}>
+          <Pressable style={styles.photoButton} onPress={handleTakePhoto}>
+            <Text style={styles.photoButtonText}>Take Photo</Text>
+          </Pressable>
+          <Pressable style={styles.photoButton} onPress={handleChooseFromLibrary}>
+            <Text style={styles.photoButtonText}>Choose from Library</Text>
+          </Pressable>
         </View>
-      ) : null}
 
-      {/* The "untrusted AI result" review step - nothing here is saved yet.
-          Only tapping "Add Meal" below actually writes to SQLite. */}
-      {analysisStatus === 'done' && (
-        <View style={styles.reviewBox}>
-          <Text style={styles.reviewTitle}>AI Detected Foods (review before saving)</Text>
-          <Text style={styles.reviewObservation}>{aiObservation}</Text>
-          <Text style={styles.reviewCalories}>
-            Approximate calorie estimate: {caloriesInput} kcal · ~{proteinInput}g protein
-          </Text>
-          {detectedFoods.map((food, index) => (
-            <DetectedFoodItem
-              key={`${food.name}-${index}`}
-              food={food}
-              onRemove={() => handleRemoveDetectedFood(index)}
-            />
-          ))}
-          {detectedFoods.length === 0 && (
-            <Text style={styles.emptyText}>No foods left - all were removed.</Text>
-          )}
-        </View>
-      )}
+        {/* Photo preview + "Analyze with AI" only shows once a photo exists.
+            The Analyze button itself is hidden once analysisStatus is "done"
+            (nothing left to analyze until a new photo is picked). */}
+        {photoUri ? (
+          <View style={styles.previewWrapper}>
+            <Image source={{ uri: photoUri }} style={styles.previewImage} />
+            <Pressable onPress={handleRemovePhoto}>
+              <Text style={styles.removePhotoText}>Remove photo</Text>
+            </Pressable>
 
-      {saveError ? <Text style={styles.saveErrorText}>{saveError}</Text> : null}
+            {analysisStatus !== 'done' && (
+              <Pressable style={styles.analyzeButton} onPress={handleAnalyzeWithAI} disabled={analysisStatus === 'loading'}>
+                {analysisStatus === 'loading' ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.analyzeButtonText}>Analyze with AI</Text>
+                )}
+              </Pressable>
+            )}
 
-      <Pressable style={styles.addButton} onPress={handleAddMeal}>
-        <Text style={styles.addButtonText}>Add Meal</Text>
-      </Pressable>
+            {analysisStatus === 'error' && (
+              <Text style={styles.errorText}>
+                Couldn't analyze this photo. Check that the backend is running, then try again.
+              </Text>
+            )}
 
-      <Text style={styles.sectionTitle}>Today's Meals</Text>
+            {analysisStatus === 'not_food' && (
+              <Text style={styles.errorText}>
+                This image doesn't appear to contain food. Please choose or take a meal photo.
+              </Text>
+            )}
+          </View>
+        ) : null}
 
-      <FlatList
-        data={meals}
-        keyExtractor={(item) => String(item.id)}
-        renderItem={({ item }) => <MealListItem meal={item} onDelete={handleDeleteMeal} />}
-        ListEmptyComponent={<Text style={styles.emptyText}>No meals logged yet today.</Text>}
-        ListFooterComponent={
-          <Text style={styles.disclaimerText}>
-            Nutrition values are estimates based on the information and images provided. Actual
-            values may vary due to portion size, ingredients and preparation method.
-          </Text>
-        }
-      />
-    </View>
+        {/* The "untrusted AI result" review step - nothing here is saved yet.
+            Only tapping "Add Meal" below actually writes to SQLite. */}
+        {analysisStatus === 'done' && (
+          <View style={styles.reviewBox}>
+            <Text style={styles.reviewTitle}>AI Detected Foods (review before saving)</Text>
+            <Text style={styles.reviewObservation}>{aiObservation}</Text>
+            <Text style={styles.reviewCalories}>
+              Approximate calorie estimate: {caloriesInput} kcal · ~{proteinInput}g protein
+            </Text>
+            {detectedFoods.map((food, index) => (
+              <DetectedFoodItem
+                key={`${food.name}-${index}`}
+                food={food}
+                onRemove={() => handleRemoveDetectedFood(index)}
+              />
+            ))}
+            {detectedFoods.length === 0 && (
+              <Text style={styles.emptyText}>No foods left - all were removed.</Text>
+            )}
+          </View>
+        )}
+
+        {saveError ? <Text style={styles.saveErrorText}>{saveError}</Text> : null}
+
+        <Pressable style={styles.addButton} onPress={handleAddMeal}>
+          <Text style={styles.addButtonText}>Add Meal</Text>
+        </Pressable>
+
+        <Text style={styles.sectionTitle}>Today's Meals</Text>
+
+        {/* A plain map instead of FlatList - a FlatList can't sit inside a
+            ScrollView, and a day's meal list is short anyway. */}
+        {meals.length === 0 ? (
+          <Text style={styles.emptyText}>No meals logged yet today.</Text>
+        ) : (
+          meals.map((item) => (
+            <MealListItem key={String(item.id)} meal={item} onDelete={handleDeleteMeal} />
+          ))
+        )}
+        <Text style={styles.disclaimerText}>
+          Nutrition values are estimates based on the information and images provided. Actual
+          values may vary due to portion size, ingredients and preparation method.
+        </Text>
+        </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
     backgroundColor: '#fff',
+  },
+  container: {
     padding: 20,
   },
   summaryCard: {
