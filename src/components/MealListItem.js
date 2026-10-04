@@ -8,15 +8,18 @@
 
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { resolveMealPhotoUri } from '../services/photoStorage';
+
 // Props:
 //   meal     - one row straight from the meals SQLite table (see mealsRepository.js)
 //   onDelete - called with meal.id when the ✕ button is tapped
 export default function MealListItem({ meal, onDelete }) {
   return (
     <View style={styles.row}>
-      {/* Only show a thumbnail if this meal actually has a saved photo. */}
+      {/* Only show a thumbnail if this meal actually has a saved photo.
+          photo_uri is stored relative to the app's folder - see photoStorage.js. */}
       {meal.photo_uri ? (
-        <Image source={{ uri: meal.photo_uri }} style={styles.thumbnail} />
+        <Image source={{ uri: resolveMealPhotoUri(meal.photo_uri) }} style={styles.thumbnail} />
       ) : null}
       <View style={styles.info}>
         <Text style={styles.mealType}>

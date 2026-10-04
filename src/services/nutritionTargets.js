@@ -49,8 +49,11 @@ function hasRequiredFields(profile) {
 // they set one, otherwise runs the BMR formula. Returns null if the
 // profile is missing required fields (never guesses a value).
 export function calculateCalorieTarget(profile) {
-  if (profile?.calorie_target_override) {
-    return profile.calorie_target_override;
+  // Only a positive number counts as a custom target - a broken saved
+  // value (negative, or text) falls back to the calculated one.
+  const override = Number(profile?.calorie_target_override);
+  if (Number.isFinite(override) && override > 0) {
+    return override;
   }
 
   if (!hasRequiredFields(profile)) return null;

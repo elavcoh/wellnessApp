@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -25,22 +25,59 @@ const Stack = createNativeStackNavigator();
 export default function RootNavigator() {
   // null = still checking, true/false = whether a profile already exists
   const [hasProfile, setHasProfile] = useState(null);
+  // true if opening the database failed - shows an error with a "Try Again"
+  // button instead of leaving the spinner up forever.
+  const [startupFailed, setStartupFailed] = useState(false);
+  // Bumped by "Try Again" to run the startup check below one more time.
+  const [startupAttempt, setStartupAttempt] = useState(0);
 
-  // Runs once when the app starts: creates the database tables, checks if
-  // a profile already exists, and re-applies any saved notification schedules.
+  // Runs when the app starts (and again on "Try Again"): creates the
+  // database tables, checks if a profile already exists, and re-applies any
+  // saved notification schedules.
   useEffect(() => {
     async function checkProfile() {
-      await initDatabase();
-      const profile = await getProfile();
-      setHasProfile(profile !== null);
+      try {
+        await initDatabase();
+        const profile = await getProfile();
+        setHasProfile(profile !== null);
+      } catch (error) {
+        setStartupFailed(true);
+        return;
+      }
 
       // Re-apply saved reminder schedules on every cold start, so they stay
-      // correct even if iOS ever clears pending notifications.
-      const notificationSettings = await getNotificationSettings();
-      syncScheduledNotifications(notificationSettings);
+      // correct even if iOS ever clears pending notifications. A failure
+      // here only affects reminders, so it doesn't stop the app opening.
+      try {
+        const notificationSettings = await getNotificationSettings();
+        await syncScheduledNotifications(notificationSettings);
+      } catch (error) {
+        // Reminders will be re-applied next time the app starts.
+      }
     }
     checkProfile();
-  }, []);
+  }, [startupAttempt]);
+
+  function handleRetryStartup() {
+    setStartupFailed(false);
+    setStartupAttempt((attempt) => attempt + 1);
+  }
+
+  if (startupFailed) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <Text style={{ fontSize: 16, textAlign: 'center', marginBottom: 16 }}>
+          The app couldn't open its data. Please try again. If this keeps happening, restart the app.
+        </Text>
+        <Pressable
+          onPress={handleRetryStartup}
+          style={{ backgroundColor: '#2f8f5b', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 }}
+        >
+          <Text style={{ color: '#fff', fontSize: 16, fontWeight: '600' }}>Try Again</Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   // While hasProfile is still null (the startup check above hasn't
   // finished yet), show a spinner instead of a blank or half-set-up

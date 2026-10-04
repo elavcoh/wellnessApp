@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -33,6 +33,7 @@ export default function MovementScreen() {
   //   ok          - steps are working, show the steps card + history
   //   unsupported - this device has no step-counting hardware (e.g. Simulator)
   //   denied      - user has not granted Motion & Fitness permission
+  //   error       - reading steps failed (e.g. Core Motion threw an error)
   const [status, setStatus] = useState('loading');
   const [todaySteps, setTodaySteps] = useState(0);
   const [stepGoal, setStepGoal] = useState(null); // from the profile, or null if not set
@@ -40,32 +41,42 @@ export default function MovementScreen() {
 
   const [profile, setProfile] = useState(null); // needed for step goal + workout template choice
   const [workout, setWorkout] = useState(null); // today's workout, or null if none generated yet
+  // Lock so a double-tap on "Generate Today's Workout" only creates one
+  // workout (the database allows one per day and would reject the second).
+  // A ref, not state, because it has to change before the next render.
+  const generatingRef = useRef(false);
 
   // Syncs the last 7 days of steps from the Pedometer into SQLite (see
   // stepService.js), then shows today's count + history. Runs whenever the
   // screen is opened or the app comes back to the foreground - iOS does not
   // let us reliably wake up in the background to do this.
+  // Any failure shows the "unavailable" message instead of leaving the
+  // spinner on screen forever (HomeScreen.js does the same).
   const refreshSteps = useCallback(async () => {
-    const profileRow = await getProfile();
-    setProfile(profileRow);
-    setStepGoal(profileRow?.step_goal ?? null);
+    try {
+      const profileRow = await getProfile();
+      setProfile(profileRow);
+      setStepGoal(profileRow?.step_goal ?? null);
 
-    const result = await syncRecentSteps();
+      const result = await syncRecentSteps();
 
-    if (!result.supported) {
-      setStatus('unsupported');
-      return;
+      if (!result.supported) {
+        setStatus('unsupported');
+        return;
+      }
+      if (!result.granted) {
+        setStatus('denied');
+        return;
+      }
+
+      setTodaySteps(result.steps);
+      setStatus('ok');
+
+      const history = await getRecentSteps(7);
+      setRecentHistory(history);
+    } catch (error) {
+      setStatus('error');
     }
-    if (!result.granted) {
-      setStatus('denied');
-      return;
-    }
-
-    setTodaySteps(result.steps);
-    setStatus('ok');
-
-    const history = await getRecentSteps(7);
-    setRecentHistory(history);
   }, []);
 
   // Reads today's workout from SQLite (or null if none exists yet).
@@ -96,17 +107,36 @@ export default function MovementScreen() {
   }, [refreshSteps, loadWorkout]);
 
   // Picks a fixed workout template (no AI) based on the user's profile.
+  // If today already has a workout (e.g. created a moment ago), it just
+  // shows that one instead of trying to create a second.
   async function handleGenerateWorkout() {
-    const template = selectWorkoutTemplate(profile);
-    const exercises = template.exercises.map((exercise) => ({ ...exercise, completed: false }));
-    const created = await createWorkout({
-      date: getTodayDateString(),
-      workoutName: template.name,
-      location: profile?.training_location ?? 'Home',
-      goal: profile?.goal ?? null,
-      exercises,
-    });
-    setWorkout(created);
+    if (generatingRef.current) return; // already generating - ignore this tap
+    generatingRef.current = true;
+    try {
+      const date = getTodayDateString();
+      const existing = await getWorkoutForDate(date);
+      if (existing) {
+        setWorkout(existing);
+        return;
+      }
+
+      const template = selectWorkoutTemplate(profile);
+      const exercises = template.exercises.map((exercise) => ({ ...exercise, completed: false }));
+      const created = await createWorkout({
+        date,
+        workoutName: template.name,
+        location: profile?.training_location ?? 'Home',
+        goal: profile?.goal ?? null,
+        exercises,
+      });
+      setWorkout(created);
+    } catch (error) {
+      // Most likely today's workout was created some other way in the
+      // meantime - just show whatever is saved now.
+      loadWorkout();
+    } finally {
+      generatingRef.current = false;
+    }
   }
 
   // Flips one exercise's completed flag on/off, saves the whole updated
@@ -141,6 +171,12 @@ export default function MovementScreen() {
         <Text style={styles.messageText}>
           Step tracking isn't available on this device. This feature needs a physical iPhone (it
           doesn't work in the Simulator).
+        </Text>
+      )}
+
+      {status === 'error' && (
+        <Text style={styles.messageText}>
+          Steps are unavailable right now. Try again in a moment.
         </Text>
       )}
 

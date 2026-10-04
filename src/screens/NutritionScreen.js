@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -26,6 +26,7 @@ import { getProfile } from '../database/repositories/userProfileRepository';
 import { getCurrentTimeString, getTodayDateString } from '../utils/dateUtils';
 import { analyzeMealPhoto, analyzeMealText } from '../services/aiService';
 import { calculateCalorieTarget, calculateProteinTarget } from '../services/nutritionTargets';
+import { deleteMealPhoto, saveMealPhoto } from '../services/photoStorage';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 
@@ -78,6 +79,13 @@ export default function NutritionScreen() {
   // Message shown above "Add Meal" when the meal can't be saved yet (e.g.
   // calories missing). Cleared as soon as the user changes the form.
   const [saveError, setSaveError] = useState('');
+
+  // True while "Add Meal" is saving, so the button shows as disabled.
+  // savingRef is the real lock: a state update only takes effect on the
+  // next render, so two very fast taps could both still see isSaving as
+  // false - a ref changes immediately, so the second tap is ignored.
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
 
   // The user's profile, needed only to calculate the calorie/protein
   // targets shown in the summary card below (see calculateCalorieTarget).
@@ -275,6 +283,7 @@ export default function NutritionScreen() {
   // Description, calories and protein are all required: a meal without
   // numbers would silently count as 0 in today's totals and the AI Coach.
   async function handleAddMeal() {
+    if (savingRef.current) return; // a save is already running - ignore this tap
     if (!description.trim()) {
       setSaveError('Describe what you ate before saving.');
       return;
@@ -306,16 +315,40 @@ export default function NutritionScreen() {
           })
         : null;
 
-    await addMeal({
-      mealType,
-      description: description.trim(),
-      date: getTodayDateString(),
-      time: getCurrentTimeString(),
-      photoUri,
-      detectedFoodsJson,
-      estimatedCalories: calories,
-      estimatedProteinG: protein,
-    });
+    savingRef.current = true;
+    setIsSaving(true);
+    try {
+      // The picked photo sits in a temporary folder iOS can clear, so copy
+      // it into the app's own folder first (see photoStorage.js). Done only
+      // here, on save, so photos that are picked and then discarded never
+      // get copied. If the copy fails, still save the meal with the
+      // temporary photo rather than losing the meal.
+      let savedPhotoUri = photoUri;
+      if (photoUri) {
+        try {
+          savedPhotoUri = await saveMealPhoto(photoUri);
+        } catch (error) {
+          savedPhotoUri = photoUri;
+        }
+      }
+
+      await addMeal({
+        mealType,
+        description: description.trim(),
+        date: getTodayDateString(),
+        time: getCurrentTimeString(),
+        photoUri: savedPhotoUri,
+        detectedFoodsJson,
+        estimatedCalories: calories,
+        estimatedProteinG: protein,
+      });
+    } catch (error) {
+      setSaveError("Couldn't save this meal. Please try again.");
+      return;
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
+    }
     setSaveError('');
     setDescription('');
     setPhotoUri(null);
@@ -329,7 +362,9 @@ export default function NutritionScreen() {
   }
 
   async function handleDeleteMeal(id) {
+    const meal = meals.find((m) => m.id === id);
     await deleteMeal(id);
+    deleteMealPhoto(meal?.photo_uri); // remove its photo file too, if it has one
     loadMeals();
   }
 
@@ -340,6 +375,10 @@ export default function NutritionScreen() {
   // null if the profile is missing required fields (e.g. sex) - see nutritionTargets.js.
   const calorieTarget = calculateCalorieTarget(profile);
   const proteinTarget = calculateProteinTarget(profile);
+  // Negative once the user has eaten more than the target - the summary
+  // card then shows "Over by 200" instead of "Remaining -200".
+  const remainingCalories = calorieTarget ? calorieTarget - totalCaloriesToday : null;
+  const isOverTarget = remainingCalories !== null && remainingCalories < 0;
 
   // The form + meal list is taller than the screen, so it all lives in one
   // ScrollView. KeyboardAvoidingView pushes it up so the keyboard doesn't
@@ -348,15 +387,16 @@ export default function NutritionScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}//this function is used to avoid the keyboard covering the input fields on iOS devices. 
     >
-      <ScrollView
+      <ScrollView //this function is used to make the content scrollable when it exceeds the screen height.
         contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+        keyboardShouldPersistTaps="handled"//this function is used to allow taps on buttons and other interactive elements to work even when the keyboard is open.
+        keyboardDismissMode="on-drag"//this function is used to dismiss the keyboard when the user drags the scroll view.
       >
         <Text style={styles.title}>Nutrition</Text>
 
+        {/* this function is used to display a banner with a warning message about the accuracy of AI estimates. */}
         <View style={styles.aiBanner}>
           <Text style={styles.aiBannerText}>AI estimates are approximate. Review before saving.</Text>
         </View>
@@ -364,7 +404,7 @@ export default function NutritionScreen() {
         {/* Two versions of the summary card: a full target/logged/remaining
             view once we can calculate a target, or a simpler "just show what
             was logged" view when the profile doesn't have enough data yet. */}
-        <View style={styles.summaryCard}>
+        <View style={styles.summaryCard}> 
           {calorieTarget ? (
             <>
               <View style={styles.summaryRow}>
@@ -377,9 +417,9 @@ export default function NutritionScreen() {
                   <Text style={styles.summaryValue}>~{totalCaloriesToday.toLocaleString()} kcal</Text>
                 </View>
                 <View>
-                  <Text style={styles.summaryLabel}>Remaining</Text>
-                  <Text style={styles.summaryValue}>
-                    ~{(calorieTarget - totalCaloriesToday).toLocaleString()} kcal
+                  <Text style={styles.summaryLabel}>{isOverTarget ? 'Over by' : 'Remaining'}</Text>
+                  <Text style={[styles.summaryValue, isOverTarget && styles.summaryValueOver]}>
+                    ~{Math.abs(remainingCalories).toLocaleString()} kcal
                   </Text>
                 </View>
               </View>
@@ -431,6 +471,7 @@ export default function NutritionScreen() {
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.analyzeButtonText}>
+                  {/* this line is used to display the text on the button that triggers the AI estimation */}
                   {analysisStatus === 'done' ? 'Estimate again' : 'Estimate with AI'}
                 </Text>
               )}
@@ -533,8 +574,12 @@ export default function NutritionScreen() {
 
         {saveError ? <Text style={styles.saveErrorText}>{saveError}</Text> : null}
 
-        <Pressable style={styles.addButton} onPress={handleAddMeal}>
-          <Text style={styles.addButtonText}>Add Meal</Text>
+        <Pressable
+          style={[styles.addButton, isSaving && styles.buttonDisabled]}
+          onPress={handleAddMeal}
+          disabled={isSaving}
+        >
+          <Text style={styles.addButtonText}>{isSaving ? 'Saving…' : 'Add Meal'}</Text>
         </Pressable>
 
         <Text style={styles.sectionTitle}>Today's Meals</Text>
@@ -586,6 +631,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#2f8f5b',
     marginTop: 2,
+  },
+  summaryValueOver: {
+    color: '#c0392b',
   },
   summarySubtext: {
     fontSize: 12,

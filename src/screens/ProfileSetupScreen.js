@@ -2,7 +2,7 @@
  * Profile form and target setup screen.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 import ChipSelector from '../components/ChipSelector';
@@ -15,6 +15,40 @@ const ACTIVITY_LEVEL_OPTIONS = ['Sedentary', 'Light', 'Moderate', 'Active'];
 const EXPERIENCE_OPTIONS = ['Beginner', 'Intermediate', 'Advanced'];
 const LOCATION_OPTIONS = ['Home', 'Gym'];
 const SEX_OPTIONS = ['Male', 'Female'];
+
+// Sensible ranges for each number field. Anything outside these is almost
+// certainly a typo (e.g. weight -70, or height in metres instead of cm)
+// and would produce nonsense calorie/protein targets, so it isn't saved.
+const NUMBER_RULES = {
+  age: { label: 'Age', min: 13, max: 120, wholeNumber: true },
+  heightCm: { label: 'Height', min: 100, max: 250 },
+  weightKg: { label: 'Weight', min: 30, max: 300 },
+  workoutDaysPerWeek: { label: 'Workout days per week', min: 0, max: 7, wholeNumber: true },
+  stepGoal: { label: 'Daily step goal', min: 1000, max: 100000, wholeNumber: true },
+  calorieTarget: { label: 'Custom calorie target', min: 800, max: 6000, wholeNumber: true },
+};
+
+// Checks one number field against its rule in NUMBER_RULES.
+// Returns { value, error }:
+//   empty text      -> { value: null, error: null } (every field is optional)
+//   a valid number  -> { value: the number, error: null }
+//   anything else   -> { value: null, error: a message to show the user }
+// Accepts "70,5" too, since some phone keyboards type a comma for decimals.
+function parseNumberField(text, rule) {
+  const trimmed = String(text ?? '').trim();
+  if (!trimmed) return { value: null, error: null };
+  const value = Number(trimmed.replace(',', '.'));
+  const isValid =
+    Number.isFinite(value) &&
+    value >= rule.min &&
+    value <= rule.max &&
+    (!rule.wholeNumber || Number.isInteger(value));
+  if (!isValid) {
+    const kind = rule.wholeNumber ? 'a whole number' : 'a number';
+    return { value: null, error: `${rule.label} must be ${kind} between ${rule.min} and ${rule.max}.` };
+  }
+  return { value, error: null };
+}
 
 export default function ProfileSetupScreen({ navigation, route }) {
   const isEditing = route?.params?.isEditing ?? false;
@@ -40,6 +74,19 @@ export default function ProfileSetupScreen({ navigation, route }) {
   const [overrideReason, setOverrideReason] = useState(''); //For the AI context if needed
   const [checkStatus, setCheckStatus] = useState('idle');
   const [checkAnswer, setCheckAnswer] = useState(''); // the AI's explanation text, shown under the button
+  const [overrideError, setOverrideError] = useState(''); // shown when the proposed target isn't a sensible number
+  // Goes up by one every time the proposed number is edited. An AI answer
+  // only counts if this hasn't changed since the question was sent - so an
+  // answer about 2200 can never approve 900 typed while it was loading.
+  const checkRequestRef = useRef(0);
+
+  // Shown above the save button when a number field is out of range.
+  const [saveError, setSaveError] = useState('');
+  // Lock so a double-tap on "Finish Setup" only saves once - two saves at
+  // the same moment would both see "no profile yet" and create two rows.
+  // A ref, not state, because it has to change before the next render.
+  const savingRef = useRef(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Load saved profile when editing.
   useEffect(() => {
@@ -65,22 +112,50 @@ export default function ProfileSetupScreen({ navigation, route }) {
   }, [isEditing]);// only run on mount
 
   // Save profile and close or continue to app.
+  // Every number is checked first (see NUMBER_RULES) - if any is out of
+  // range, nothing is saved and the first problem is shown instead.
   async function handleSave() {
-    await saveProfile({
-      age: Number(age) || null,
-      heightCm: Number(heightCm) || null,
-      weightKg: Number(weightKg) || null,
-      sex,
-      goal,
-      activityLevel,
-      workoutExperience,
-      workoutDaysPerWeek: Number(workoutDaysPerWeek) || null,
-      trainingLocation,
-      dietaryPreference,
-      avoidedFoods,
-      stepGoal: Number(stepGoal) || null,
-      calorieTargetOverride: confirmedOverride,
-    });
+    if (savingRef.current) return; // already saving - ignore this tap
+
+    const fields = {
+      age: parseNumberField(age, NUMBER_RULES.age),
+      heightCm: parseNumberField(heightCm, NUMBER_RULES.heightCm),
+      weightKg: parseNumberField(weightKg, NUMBER_RULES.weightKg),
+      workoutDaysPerWeek: parseNumberField(workoutDaysPerWeek, NUMBER_RULES.workoutDaysPerWeek),
+      stepGoal: parseNumberField(stepGoal, NUMBER_RULES.stepGoal),
+    };
+    const firstError = Object.values(fields).find((field) => field.error)?.error;
+    if (firstError) {
+      setSaveError(firstError);
+      return;
+    }
+    setSaveError('');
+
+    savingRef.current = true;
+    setIsSaving(true);
+    try {
+      await saveProfile({
+        age: fields.age.value,
+        heightCm: fields.heightCm.value,
+        weightKg: fields.weightKg.value,
+        sex,
+        goal,
+        activityLevel,
+        workoutExperience,
+        workoutDaysPerWeek: fields.workoutDaysPerWeek.value,
+        trainingLocation,
+        dietaryPreference,
+        avoidedFoods,
+        stepGoal: fields.stepGoal.value,
+        calorieTargetOverride: confirmedOverride,
+      });
+    } catch (error) {
+      setSaveError("Couldn't save your profile. Please try again.");
+      return;
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
+    }
 
     if (isEditing) {
       // Just close this screen and go back to wherever it was opened from (Home).
@@ -92,11 +167,12 @@ export default function ProfileSetupScreen({ navigation, route }) {
     }
   }
 
-  // Live preview from current form values.
+  // Live preview from current form values. An out-of-range value counts as
+  // "not filled in" here, so the preview never shows a nonsense target.
   const draftProfile = {
-    age: Number(age) || null,// convert to number, or null if empty
-    height_cm: Number(heightCm) || null,//
-    weight_kg: Number(weightKg) || null,
+    age: parseNumberField(age, NUMBER_RULES.age).value,// a number, or null if empty/out of range
+    height_cm: parseNumberField(heightCm, NUMBER_RULES.heightCm).value,
+    weight_kg: parseNumberField(weightKg, NUMBER_RULES.weightKg).value,
     sex,// can be null if not selected
     goal,
     activity_level: activityLevel,
@@ -107,7 +183,14 @@ export default function ProfileSetupScreen({ navigation, route }) {
   // Ask the AI coach to review a custom calorie target.
   async function handleCheckOverride() {
     if (!proposedOverride.trim()) return; // nothing typed yet, don't bother asking
+    // Don't ask the AI about something that isn't a sensible target at all.
+    const { error } = parseNumberField(proposedOverride, NUMBER_RULES.calorieTarget);
+    if (error) {
+      setOverrideError(error);
+      return;
+    }
 
+    const requestId = checkRequestRef.current;
     setCheckStatus('checking');
     try {
       // We write out the question in plain English ourselves, including
@@ -127,23 +210,45 @@ export default function ProfileSetupScreen({ navigation, route }) {
           : null,
       };
       const result = await getWellnessAdvice(question, context);// returns { answer: string, target_assessment: 'reasonable' | 'caution' | 'not_applicable' }
+      // The number was edited while the AI was answering - this answer is
+      // about the old number, so throw it away.
+      if (requestId !== checkRequestRef.current) return;
       setCheckAnswer(result.answer);// the AI's explanation text, shown under the button
       // Anything other than an explicit "reasonable" is treated as
       // "caution" (including the normal not_applicable default) - the
       // safer choice when we're not sure, since it just adds one extra tap.
       setCheckStatus(result.target_assessment === 'reasonable' ? 'reasonable' : 'caution');//
     } catch (error) {
+      if (requestId !== checkRequestRef.current) return; // old question, ignore
       setCheckStatus('error');
     }
   }
 
-  // Confirm the custom target.
+  // Editing the proposed number makes any AI answer out of date (it was
+  // about the old number), so clear it - the user has to check again
+  // before "Use This Target" shows up.
+  function handleProposedOverrideChange(text) {
+    setProposedOverride(text);
+    checkRequestRef.current += 1;
+    setCheckStatus('idle');
+    setCheckAnswer('');
+    setOverrideError('');
+  }
+
+  // Confirm the custom target. Checked again here, so only a sensible
+  // whole number can ever be saved as the target.
   function handleUseOverride() {
-    setConfirmedOverride(Number(proposedOverride));
+    const { value, error } = parseNumberField(proposedOverride, NUMBER_RULES.calorieTarget);
+    if (error || value === null) {
+      setOverrideError(error ?? 'Type a target first.');
+      return;
+    }
+    setConfirmedOverride(value);
     setProposedOverride('');
     setOverrideReason('');
     setCheckStatus('idle');
     setCheckAnswer('');
+    setOverrideError('');
   }
 
   // Remove the custom target and use the calculated one again.
@@ -232,7 +337,7 @@ export default function ProfileSetupScreen({ navigation, route }) {
                 <TextInput
                   style={styles.input}
                   value={proposedOverride}
-                  onChangeText={setProposedOverride}
+                  onChangeText={handleProposedOverrideChange}
                   keyboardType="numeric"
                   placeholder="e.g. 2200"
                 />
@@ -253,6 +358,8 @@ export default function ProfileSetupScreen({ navigation, route }) {
                     <Text style={styles.checkButtonText}>Check with AI Coach</Text>
                   )}
                 </Pressable>
+
+                {overrideError ? <Text style={styles.errorText}>{overrideError}</Text> : null}
 
                 {checkStatus === 'error' && (
                   <Text style={styles.errorText}>
@@ -336,8 +443,16 @@ export default function ProfileSetupScreen({ navigation, route }) {
         placeholder="e.g. 8000"
       />
 
-      <Pressable style={styles.saveButton} onPress={handleSave}>
-        <Text style={styles.saveButtonText}>{isEditing ? 'Save Changes' : 'Finish Setup'}</Text>
+      {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
+
+      <Pressable
+        style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+        onPress={handleSave}
+        disabled={isSaving}
+      >
+        <Text style={styles.saveButtonText}>
+          {isSaving ? 'Saving…' : isEditing ? 'Save Changes' : 'Finish Setup'}
+        </Text>
       </Pressable>
     </ScrollView>
   );
@@ -374,6 +489,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 12,
+  },
+  saveButtonDisabled: {
+    opacity: 0.5,
   },
   saveButtonText: {
     color: '#fff',

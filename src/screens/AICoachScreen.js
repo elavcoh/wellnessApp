@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -64,6 +64,12 @@ export default function AICoachScreen() {
   // getWellnessAdvice - answer, recommendations, missing_information, etc.)
   const [result, setResult] = useState(null);
 
+  // Goes up by one for every question asked. When an answer arrives, it's
+  // only shown if no newer question was asked in the meantime - so the
+  // screen always shows the answer to the LAST question, even if an older
+  // one happens to come back later.
+  const latestQuestionRef = useRef(0);
+
   // Re-reads today's data from SQLite and stores it in contextSummary, just
   // for display in the summary box (this is separate from the context sent
   // with an actual question - see handleAsk below).
@@ -86,6 +92,8 @@ export default function AICoachScreen() {
     const trimmed = question.trim();
     if (!trimmed) return; // ignore empty taps (e.g. blank custom question)
 
+    const questionId = latestQuestionRef.current + 1;
+    latestQuestionRef.current = questionId;
     setStatus('loading');
     setResult(null); // clear the previous answer so it doesn't flash on screen
     try {
@@ -94,11 +102,13 @@ export default function AICoachScreen() {
       // and the AI must see the real current state, not a stale snapshot.
       const context = await buildTodayContext();
       const advice = await getWellnessAdvice(trimmed, context);
+      if (questionId !== latestQuestionRef.current) return; // a newer question was asked - ignore this answer
       setResult(advice);
       setStatus('done');
     } catch (error) {
       // Network down, backend not running, or OpenAI failed - show a
       // friendly message instead of crashing (see the status === 'error' text below).
+      if (questionId !== latestQuestionRef.current) return; // an old question failed - the newer one is still loading
       setStatus('error');
     }
   }

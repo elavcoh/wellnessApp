@@ -48,6 +48,8 @@ async function runSync() {
 
   const [profile, savedRows] = await Promise.all([getProfile(), getRecentSteps(HISTORY_DAYS)]);
   const currentGoal = profile?.step_goal ?? null;
+  // Turn the saved rows into a lookup by date ({ '2026-10-04': row, ... }),
+  // so the loop below can find each day's saved row instantly.
   const savedByDate = Object.fromEntries(savedRows.map((row) => [row.date, row]));
 
   // Decide which days actually need asking Core Motion. Today always does.
@@ -57,6 +59,8 @@ async function runSync() {
   // never fetched again - so normally this is just today (+ yesterday once).
   const now = new Date();
   const daysToFetch = [];
+  // Walk the 7 days from oldest (6 days ago) to newest (today), so today
+  // ends up last in daysToFetch.
   for (let daysAgo = HISTORY_DAYS - 1; daysAgo >= 0; daysAgo--) {
     // Local midnight at the start of this day (setHours uses the phone's time zone).
     const start = new Date();
@@ -68,9 +72,20 @@ async function runSync() {
     const isToday = daysAgo === 0;
 
     const date = toLocalDateString(start);
+    // The row already in SQLite for this date, or undefined if there is none
+    // (e.g. the app wasn't opened that day).
     const saved = savedByDate[date];
+    // A day is final when its row was written AFTER the day ended (at or past
+    // the next midnight), so it already holds the full day's steps.
+    // No row -> saved is undefined -> not final.
+    // Comparing the two as strings is safe: both are UTC ISO strings in the
+    // same format, so alphabetical order is the same as time order.
     const isFinal = saved && saved.updated_at >= end.toISOString();
+    // The actual decision: fetch it if it's today (steps are still adding
+    // up) or if what we have saved isn't final yet. Final past days are
+    // skipped, so their saved numbers are never overwritten.
     if (isToday || !isFinal) {
+      // Only days pushed here get asked from Core Motion and saved below.
       daysToFetch.push({ date, start, end: isToday ? now : end, isToday, saved });
     }
   }
