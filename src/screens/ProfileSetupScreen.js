@@ -1,15 +1,26 @@
 /**
- * Profile form and target setup screen.
+ * ProfileSetupScreen.js
+ *
+ * Purpose: The profile form - used once for onboarding and again as "Edit Profile".
+ * Shows a live calorie target and can ask the AI Coach about a custom one.
+ * Related to: RootNavigator.js (routes ProfileSetup and ProfileEdit). Saves through
+ * userProfileRepository.js. Styles in styles/ProfileSetupScreen.styles.js.
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TextInput, View } from 'react-native';
 
 import ChipSelector from '../components/ChipSelector';
 import { getProfile, saveProfile } from '../database/repositories/userProfileRepository';
 import { calculateCalorieTarget, calculateProteinTarget } from '../services/nutritionTargets';
 import { getWellnessAdvice } from '../services/aiService';
+import PressableScale from '../components/PressableScale';
+import { colors } from '../styles/theme';
+import styles from '../styles/ProfileSetupScreen.styles';
 
+// The choices for each chip row. These exact strings are saved in the
+// database and used by nutritionTargets.js and workoutTemplates.js, so
+// change them in all places together.
 const GOAL_OPTIONS = ['Lose weight', 'Maintain', 'Build muscle', 'General wellness'];
 const ACTIVITY_LEVEL_OPTIONS = ['Sedentary', 'Light', 'Moderate', 'Active'];
 const EXPERIENCE_OPTIONS = ['Beginner', 'Intermediate', 'Advanced'];
@@ -50,6 +61,19 @@ function parseNumberField(text, rule) {
   return { value, error: null };
 }
 
+// One form row: a small label above a text box. Any extra props (value,
+// onChangeText, placeholder, keyboardType...) go straight to the TextInput.
+function LabeledInput({ label, ...inputProps }) {
+  return (
+    <>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput style={styles.input} placeholderTextColor={colors.textSoft} {...inputProps} />
+    </>
+  );
+}
+
+// isEditing comes from RootNavigator.js: false for first-time setup,
+// true when opened from Home as "Edit Profile".
 export default function ProfileSetupScreen({ navigation, route }) {
   const isEditing = route?.params?.isEditing ?? false;
 
@@ -117,6 +141,7 @@ export default function ProfileSetupScreen({ navigation, route }) {
   async function handleSave() {
     if (savingRef.current) return; // already saving - ignore this tap
 
+    // Check every number field; each gives { value, error }.
     const fields = {
       age: parseNumberField(age, NUMBER_RULES.age),
       heightCm: parseNumberField(heightCm, NUMBER_RULES.heightCm),
@@ -261,37 +286,43 @@ export default function ProfileSetupScreen({ navigation, route }) {
   }
 
   return (// the main form
-    <ScrollView contentContainerStyle={styles.container}>
+    // During onboarding there's no header bar, so the form gets extra top
+    // space to clear the status bar.
+    <ScrollView contentContainerStyle={[styles.container, !isEditing && styles.containerOnboarding]}>
+      <Text style={styles.overline}>{isEditing ? 'Your details' : "Let's get to know you"}</Text>
       <Text style={styles.title}>{isEditing ? 'Edit Profile' : 'Create Your Profile'}</Text>
 
-      <Text style={styles.fieldLabel}>Age</Text>
-      <TextInput
-        style={styles.input}
+      <LabeledInput
+        label="Age"
         value={age}
         onChangeText={setAge}
         keyboardType="numeric"
         placeholder="e.g. 25"
       />
 
-      <Text style={styles.fieldLabel}>Height (cm)</Text>
-      <TextInput
-        style={styles.input}
+      <LabeledInput
+        label="Height (cm)"
         value={heightCm}
         onChangeText={setHeightCm}
         keyboardType="numeric"
         placeholder="e.g. 175"
       />
 
-      <Text style={styles.fieldLabel}>Weight (kg)</Text>
-      <TextInput
-        style={styles.input}
+      <LabeledInput
+        label="Weight (kg)"
         value={weightKg}
         onChangeText={setWeightKg}
         keyboardType="numeric"
         placeholder="e.g. 70"
       />
 
-      <ChipSelector label="Sex" options={SEX_OPTIONS} selected={sex} onSelect={setSex} />
+      {/* Tapping the selected chip again un-selects it - sex is optional. */}
+      <ChipSelector
+        label="Sex"
+        options={SEX_OPTIONS}
+        selected={sex}
+        onSelect={(option) => setSex((current) => (current === option ? null : option))}
+      />
       <Text style={styles.helperText}>
         Used only to estimate your daily calorie needs - optional, skip if you'd rather not say
         (you just won't see a calorie target).
@@ -313,7 +344,9 @@ export default function ProfileSetupScreen({ navigation, route }) {
              link to remove it and go back to the calculated one. */}
       <View style={styles.targetCard}>
         <Text style={styles.targetCardTitle}>Estimated Nutrition Target</Text>
-        {calculatedCalorieTarget ? (
+        {/* Also shown when only a custom target exists (e.g. sex was
+            un-selected), so it can still be seen and removed. */}
+        {calculatedCalorieTarget || confirmedOverride ? (
           <>
             <Text style={styles.targetValue}>
               {confirmedOverride ?? calculatedCalorieTarget} kcal / day
@@ -328,9 +361,9 @@ export default function ProfileSetupScreen({ navigation, route }) {
             </Text>
 
             {confirmedOverride ? (
-              <Pressable onPress={handleRemoveOverride}>
+              <PressableScale onPress={handleRemoveOverride}>
                 <Text style={styles.overrideLink}>Remove custom target, use calculated value</Text>
-              </Pressable>
+              </PressableScale>
             ) : (
               <View style={styles.overrideBox}>
                 <Text style={styles.overrideLabel}>Want a different target? Propose one:</Text>
@@ -347,17 +380,17 @@ export default function ProfileSetupScreen({ navigation, route }) {
                   onChangeText={setOverrideReason}
                   placeholder="Why? (optional)"
                 />
-                <Pressable
+                <PressableScale
                   style={styles.checkButton}
                   onPress={handleCheckOverride}
                   disabled={checkStatus === 'checking'}
                 >
                   {checkStatus === 'checking' ? (
-                    <ActivityIndicator color="#fff" />
+                    <ActivityIndicator color={colors.textOnColor} />
                   ) : (
                     <Text style={styles.checkButtonText}>Check with AI Coach</Text>
                   )}
-                </Pressable>
+                </PressableScale>
 
                 {overrideError ? <Text style={styles.errorText}>{overrideError}</Text> : null}
 
@@ -377,11 +410,11 @@ export default function ProfileSetupScreen({ navigation, route }) {
                     >
                       {checkAnswer}
                     </Text>
-                    <Pressable style={styles.checkButton} onPress={handleUseOverride}>
+                    <PressableScale style={styles.checkButton} onPress={handleUseOverride}>
                       <Text style={styles.checkButtonText}>
                         {checkStatus === 'caution' ? 'Use Anyway' : 'Use This Target'}
                       </Text>
-                    </Pressable>
+                    </PressableScale>
                   </View>
                 )}
               </View>
@@ -402,9 +435,8 @@ export default function ProfileSetupScreen({ navigation, route }) {
         onSelect={setWorkoutExperience}
       />
 
-      <Text style={styles.fieldLabel}>Workout Days per Week</Text>
-      <TextInput
-        style={styles.input}
+      <LabeledInput
+        label="Workout Days per Week"
         value={workoutDaysPerWeek}
         onChangeText={setWorkoutDaysPerWeek}
         keyboardType="numeric"
@@ -418,25 +450,22 @@ export default function ProfileSetupScreen({ navigation, route }) {
         onSelect={setTrainingLocation}
       />
 
-      <Text style={styles.fieldLabel}>Dietary Preferences</Text>
-      <TextInput
-        style={styles.input}
+      <LabeledInput
+        label="Dietary Preferences"
         value={dietaryPreference}
         onChangeText={setDietaryPreference}
         placeholder="e.g. vegetarian"
       />
 
-      <Text style={styles.fieldLabel}>Foods You Avoid</Text>
-      <TextInput
-        style={styles.input}
+      <LabeledInput
+        label="Foods You Avoid"
         value={avoidedFoods}
         onChangeText={setAvoidedFoods}
         placeholder="e.g. peanuts, shellfish"
       />
 
-      <Text style={styles.fieldLabel}>Daily Step Goal (optional)</Text>
-      <TextInput
-        style={styles.input}
+      <LabeledInput
+        label="Daily Step Goal (optional)"
         value={stepGoal}
         onChangeText={setStepGoal}
         keyboardType="numeric"
@@ -445,7 +474,7 @@ export default function ProfileSetupScreen({ navigation, route }) {
 
       {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
 
-      <Pressable
+      <PressableScale
         style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
         onPress={handleSave}
         disabled={isSaving}
@@ -453,120 +482,7 @@ export default function ProfileSetupScreen({ navigation, route }) {
         <Text style={styles.saveButtonText}>
           {isSaving ? 'Saving…' : isEditing ? 'Save Changes' : 'Finish Setup'}
         </Text>
-      </Pressable>
+      </PressableScale>
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 20,
-  },
-  fieldLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 6,
-    color: '#333',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 16,
-    fontSize: 16,
-  },
-  saveButton: {
-    backgroundColor: '#2f8f5b',
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  saveButtonDisabled: {
-    opacity: 0.5,
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  helperText: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: -12,
-    marginBottom: 16,
-  },
-  targetCard: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 20,
-  },
-  targetCardTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  targetValue: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#2f8f5b',
-  },
-  targetSubtext: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 4,
-  },
-  overrideLink: {
-    fontSize: 13,
-    color: '#c0392b',
-    marginTop: 10,
-  },
-  overrideBox: {
-    marginTop: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    paddingTop: 12,
-  },
-  overrideLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  checkButton: {
-    backgroundColor: '#3a6ea5',
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  checkButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  checkAnswer: {
-    fontSize: 13,
-    color: '#333',
-    marginTop: 10,
-    marginBottom: 8,
-    lineHeight: 18,
-  },
-  checkAnswerCaution: {
-    color: '#a35b00',
-  },
-  errorText: {
-    color: '#c0392b',
-    fontSize: 13,
-    marginTop: 8,
-  },
-});

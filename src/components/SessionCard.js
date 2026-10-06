@@ -6,7 +6,11 @@
  * Related to: used by BreathingScreen.js.
  */
 
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import PressableScale from './PressableScale';
+import { colors } from '../styles/theme';
+import { sessionCardStyles as styles } from '../styles/components.styles';
 
 // Props:
 //   session - one entry from breathingPatterns.js (title, description,
@@ -17,35 +21,24 @@ export default function SessionCard({ session, onPress }) {
   // BreathingScreen.js) but shown to the user in whole minutes.
   const minutes = Math.round(session.durationSeconds / 60);
   return (
-    <Pressable style={styles.card} onPress={onPress}>
-      <Text style={styles.title}>{session.title}</Text>
-      <Text style={styles.description}>{session.description}</Text>
-      <Text style={styles.duration}>{minutes} min</Text>
-    </Pressable>
+    <PressableScale style={styles.card} onPress={onPress}>
+      <View style={[styles.playBadge, session.level === 'Advanced' && styles.playBadgeAdvanced]}>
+        <Ionicons
+          name="play"
+          size={16}
+          color={session.level === 'Advanced' ? colors.calm : colors.primary}
+        />
+      </View>
+      <View style={styles.body}>
+        <Text style={styles.title}>{session.title}</Text>
+        <Text style={styles.description}>{session.description}</Text>
+        <View style={styles.metaRow}>
+          <Text style={styles.duration}>{minutes} min</Text>
+          <Text style={styles.pattern}>
+            {session.pattern.inhale}-{session.pattern.hold}-{session.pattern.exhale}
+          </Text>
+        </View>
+      </View>
+    </PressableScale>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 10,
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  description: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 2,
-  },
-  duration: {
-    fontSize: 12,
-    color: '#2f8f5b',
-    fontWeight: '600',
-    marginTop: 6,
-  },
-});

@@ -1,22 +1,26 @@
+/**
+ * NutritionScreen.js
+ *
+ * Purpose: Log meals: type or photograph a meal, get an AI estimate of calories and
+ * protein, review it, and save. Also shows today's totals vs. the target.
+ * Related to: AppTabs.js. Uses aiService.js, mealsRepository.js, photoStorage.js,
+ * nutritionTargets.js. Styles in styles/NutritionScreen.styles.js.
+ */
+
 import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-
-/**
- * Meal logging and nutrition tracking screen.
- */
 
 import ChipSelector from '../components/ChipSelector';
 import MealListItem from '../components/MealListItem';
@@ -25,10 +29,16 @@ import { addMeal, deleteMeal, getMealsForDate } from '../database/repositories/m
 import { getProfile } from '../database/repositories/userProfileRepository';
 import { getCurrentTimeString, getTodayDateString } from '../utils/dateUtils';
 import { analyzeMealPhoto, analyzeMealText } from '../services/aiService';
-import { calculateCalorieTarget, calculateProteinTarget } from '../services/nutritionTargets';
+import { calculateCalorieTarget, calculateProteinTarget, sumField } from '../services/nutritionTargets';
 import { deleteMealPhoto, saveMealPhoto } from '../services/photoStorage';
+import PressableScale from '../components/PressableScale';
+import { colors } from '../styles/theme';
+import styles from '../styles/NutritionScreen.styles';
 
+// The meal type chips shown above the form.
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
+const MAX_MEAL_CALORIES = 5000;
+const MAX_MEAL_PROTEIN_G = 500;
 
 // Turns what the user typed into a calories/protein field into a whole
 // number, or null if it's empty or not a valid number of 0 or more.
@@ -42,6 +52,8 @@ function parseNutritionValue(text) {
   return Math.round(value);
 }
 
+// One screen with three parts: the daily summary card, the "new meal"
+// form (text or photo + optional AI estimate), and today's meal list.
 export default function NutritionScreen() {
   // --- The "new meal" form fields (what the user is currently filling in) ---
   const [mealType, setMealType] = useState(MEAL_TYPES[0]);
@@ -76,10 +88,21 @@ export default function NutritionScreen() {
   // changes, UNLESS the user has typed into the field themselves - once
   // that happens, "*ManuallyEdited" flips to true and auto-fill stops,
   // exactly like how "description" is never overwritten once non-empty.
+  // The two flags are refs, not state: an AI answer can arrive seconds after
+  // the request started, and it must see whether the user typed a number
+  // in the meantime - a state value captured at request time would be stale.
   const [caloriesInput, setCaloriesInput] = useState('');
-  const [caloriesManuallyEdited, setCaloriesManuallyEdited] = useState(false);
+  const caloriesManuallyEditedRef = useRef(false);
   const [proteinInput, setProteinInput] = useState('');
-  const [proteinManuallyEdited, setProteinManuallyEdited] = useState(false);
+  const proteinManuallyEditedRef = useRef(false);
+
+  // The description text the last "Estimate with AI" was run on. If the
+  // user edits the description after that, the estimate no longer matches
+  // it and is cleared (see handleDescriptionChange).
+  const estimatedDescriptionRef = useRef('');
+  // True right after such a clear, to tell the user why the review box
+  // disappeared and that the numbers may be out of date.
+  const [estimateOutdated, setEstimateOutdated] = useState(false);
 
   // Message shown above "Add Meal" when the meal can't be saved yet (e.g.
   // calories missing). Cleared as soon as the user changes the form.
@@ -103,6 +126,7 @@ export default function NutritionScreen() {
     setMeals(rows);
   }, []);
 
+  // Reads the profile (for the calorie/protein targets).
   const loadProfile = useCallback(async () => {
     const profileRow = await getProfile();
     setProfile(profileRow);
@@ -123,6 +147,7 @@ export default function NutritionScreen() {
   // one specific photo analysis attempt.
   function resetAnalysis() {
     analysisRequestRef.current += 1; // drop any answer still on its way
+    setEstimateOutdated(false);
     setAnalysisStatus('idle');
     setDetectedFoods([]);
     setAiSummary('');
@@ -139,11 +164,7 @@ export default function NutritionScreen() {
       mediaTypes: ['images'],
       quality: 0.5,
     });
-    if (!result.canceled) {
-      setPhotoUri(result.assets[0].uri);
-      setPhotoMimeType(result.assets[0].mimeType ?? null);
-      resetAnalysis(); // a new photo makes any previous analysis result invalid
-    }
+    keepPickedPhoto(result);
   }
 
   // Opens the photo library picker.
@@ -161,11 +182,16 @@ export default function NutritionScreen() {
       // forces a real JPEG/PNG transcode instead of the raw HEIC asset.
       preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
     });
-    if (!result.canceled) {
-      setPhotoUri(result.assets[0].uri);
-      setPhotoMimeType(result.assets[0].mimeType ?? null);
-      resetAnalysis();
-    }
+    keepPickedPhoto(result);
+  }
+
+  // Shared by the camera and the library: keeps the picked photo, unless the
+  // user cancelled. A new photo makes any previous analysis result invalid.
+  function keepPickedPhoto(result) {
+    if (result.canceled) return;
+    setPhotoUri(result.assets[0].uri);
+    setPhotoMimeType(result.assets[0].mimeType ?? null);
+    resetAnalysis();
   }
 
   // Lets the user discard the current photo and start over (e.g. wrong
@@ -199,47 +225,48 @@ export default function NutritionScreen() {
     setAnalysisStatus('done');
     setSaveError('');
     // Only fill the description if the user hasn't typed their own -
-    // never overwrite something they already wrote.
-    if (!description.trim()) {
-      setDescription(result.meal_summary);
-    }
-    if (overwriteValues || !caloriesManuallyEdited) {
+    // never overwrite something they already wrote. The (current) => form
+    // reads the description as it is NOW, not as it was when the request
+    // started - the user may have typed one while the photo was analyzing.
+    setDescription((current) => (current.trim() ? current : result.meal_summary));
+    if (overwriteValues || !caloriesManuallyEditedRef.current) {
       setCaloriesInput(String(result.total_estimated_calories));
-      setCaloriesManuallyEdited(false);
+      caloriesManuallyEditedRef.current = false;
     }
-    if (overwriteValues || !proteinManuallyEdited) {
+    if (overwriteValues || !proteinManuallyEditedRef.current) {
       setProteinInput(String(result.total_estimated_protein_g));
-      setProteinManuallyEdited(false);
+      proteinManuallyEditedRef.current = false;
     }
   }
 
   // Sends the photo to the backend for AI analysis and fills in the
   // detected foods, calories and protein (unless the user already typed
   // their own values).
-  async function handleAnalyzeWithAI() {
-    const requestId = ++analysisRequestRef.current;
-    setAnalysisStatus('loading');
-    try {
-      const result = await analyzeMealPhoto(photoUri, photoMimeType);
-      if (requestId !== analysisRequestRef.current) return; // form moved on
-      applyAnalysisResult(result, { overwriteValues: false });
-    } catch (error) {
-      if (requestId !== analysisRequestRef.current) return;
-      setAnalysisStatus('error');
-    }
+  function handleAnalyzeWithAI() {
+    runAnalysis(() => analyzeMealPhoto(photoUri, photoMimeType), { overwriteValues: false });
   }
 
   // Sends the typed description to the backend for an AI estimate and
   // fills in the calories and protein. The user can still edit them, and
   // nothing is saved until they press "Add Meal".
-  async function handleEstimateWithAI() {
+  function handleEstimateWithAI() {
     if (!description.trim()) return; // button is disabled in this case anyway
+    estimatedDescriptionRef.current = description.trim();
+    setEstimateOutdated(false);
+    runAnalysis(() => analyzeMealText(description.trim()), { overwriteValues: true });
+  }
+
+  // Shared by both AI buttons: shows the spinner, waits for the answer and
+  // puts it in the form. Every request gets a number - if the form moved on
+  // while waiting (new photo, Add Meal, edited text), the number no longer
+  // matches and the late answer is ignored.
+  async function runAnalysis(sendRequest, options) {
     const requestId = ++analysisRequestRef.current;
     setAnalysisStatus('loading');
     try {
-      const result = await analyzeMealText(description.trim());
+      const result = await sendRequest();
       if (requestId !== analysisRequestRef.current) return; // form moved on
-      applyAnalysisResult(result, { overwriteValues: true });
+      applyAnalysisResult(result, options);
     } catch (error) {
       if (requestId !== analysisRequestRef.current) return;
       setAnalysisStatus('error');
@@ -251,19 +278,11 @@ export default function NutritionScreen() {
   function handleRemoveDetectedFood(index) {
     setDetectedFoods((current) => {
       const updated = current.filter((_, i) => i !== index);
-      if (!caloriesManuallyEdited) {
-        const recalculatedCalories = updated.reduce(
-          (sum, food) => sum + (food.estimated_calories || 0),
-          0
-        );
-        setCaloriesInput(String(recalculatedCalories));
+      if (!caloriesManuallyEditedRef.current) {
+        setCaloriesInput(String(sumField(updated, 'estimated_calories')));
       }
-      if (!proteinManuallyEdited) {
-        const recalculatedProtein = updated.reduce(
-          (sum, food) => sum + (food.estimated_protein_g || 0),
-          0
-        );
-        setProteinInput(String(recalculatedProtein));
+      if (!proteinManuallyEditedRef.current) {
+        setProteinInput(String(sumField(updated, 'estimated_protein_g')));
       }
       return updated;
     });
@@ -273,20 +292,36 @@ export default function NutritionScreen() {
   // Marking "manually edited" is what stops handleAnalyzeWithAI and
   // handleRemoveDetectedFood from overwriting the user's own number later.
   // Any change to the form also clears an old "can't save yet" message.
+  // Editing the description after "Estimate with AI" (or while it's still
+  // loading) means the AI's food list belongs to the old text - clear it so
+  // it isn't saved with the meal, and drop a late answer. Only for the typed
+  // flow: with a photo, the foods come from the photo, not the text.
   function handleDescriptionChange(text) {
     setDescription(text);
     setSaveError('');
+    const estimateWasForOldText =
+      !photoUri &&
+      (analysisStatus === 'done' || analysisStatus === 'loading') &&
+      text.trim() !== estimatedDescriptionRef.current;
+    if (estimateWasForOldText) {
+      resetAnalysis();
+      setEstimateOutdated(true);
+    } else if (!photoUri && (analysisStatus === 'error' || analysisStatus === 'not_food')) {
+      resetAnalysis(); // hide the old error message once the text changes
+    }
   }
 
+  // The user typed their own calories - stop the AI from overwriting them.
   function handleCaloriesChange(text) {
     setCaloriesInput(text);
-    setCaloriesManuallyEdited(true);
+    caloriesManuallyEditedRef.current = true;
     setSaveError('');
   }
 
+  // Same as above, for protein.
   function handleProteinChange(text) {
     setProteinInput(text);
-    setProteinManuallyEdited(true);
+    proteinManuallyEditedRef.current = true;
     setSaveError('');
   }
 
@@ -312,6 +347,14 @@ export default function NutritionScreen() {
     }
     if (calories === null || protein === null) {
       setSaveError('Calories and protein must be numbers (0 or more).');
+      return;
+    }
+    // One meal above these is almost certainly a typo (an extra zero) and
+    // would throw off today's totals and the AI Coach.
+    if (calories > MAX_MEAL_CALORIES || protein > MAX_MEAL_PROTEIN_G) {
+      setSaveError(
+        `That looks too high for one meal (max ${MAX_MEAL_CALORIES} kcal and ${MAX_MEAL_PROTEIN_G}g protein). Check for a typo.`
+      );
       return;
     }
 
@@ -372,13 +415,14 @@ export default function NutritionScreen() {
     setPhotoUri(null);
     setPhotoMimeType(null);
     setCaloriesInput('');
-    setCaloriesManuallyEdited(false);
+    caloriesManuallyEditedRef.current = false;
     setProteinInput('');
-    setProteinManuallyEdited(false);
+    proteinManuallyEditedRef.current = false;
     resetAnalysis();
     loadMeals();
   }
 
+  // The trash button on a meal: deletes the row, then its photo file.
   async function handleDeleteMeal(id) {
     const meal = meals.find((m) => m.id === id);
     await deleteMeal(id);
@@ -388,8 +432,8 @@ export default function NutritionScreen() {
 
   // Everything below is computed fresh on every render from `meals` and
   // `profile` - no extra state needed, just plain math over what's already loaded.
-  const totalCaloriesToday = meals.reduce((sum, meal) => sum + (meal.estimated_calories || 0), 0);
-  const totalProteinToday = meals.reduce((sum, meal) => sum + (meal.estimated_protein_g || 0), 0);
+  const totalCaloriesToday = sumField(meals, 'estimated_calories');
+  const totalProteinToday = sumField(meals, 'estimated_protein_g');
   // null if the profile is missing required fields (e.g. sex) - see nutritionTargets.js.
   const calorieTarget = calculateCalorieTarget(profile);
   const proteinTarget = calculateProteinTarget(profile);
@@ -405,17 +449,19 @@ export default function NutritionScreen() {
   return (
     <KeyboardAvoidingView
       style={styles.screen}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}//this function is used to avoid the keyboard covering the input fields on iOS devices. 
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined} // iOS: add space so the keyboard doesn't cover the fields
     >
-      <ScrollView //this function is used to make the content scrollable when it exceeds the screen height.
+      <ScrollView // the whole page scrolls when it's taller than the screen
         contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"//this function is used to allow taps on buttons and other interactive elements to work even when the keyboard is open.
-        keyboardDismissMode="on-drag"//this function is used to dismiss the keyboard when the user drags the scroll view.
+        keyboardShouldPersistTaps="handled" // buttons work on the first tap even with the keyboard open
+        keyboardDismissMode="on-drag" // scrolling closes the keyboard
       >
+        <Text style={styles.overline}>Fuel your day</Text>
         <Text style={styles.title}>Nutrition</Text>
 
-        {/* this function is used to display a banner with a warning message about the accuracy of AI estimates. */}
+        {/* Reminder that AI numbers are only estimates. */}
         <View style={styles.aiBanner}>
+          <Ionicons name="sparkles-outline" size={16} color={colors.warning} />
           <Text style={styles.aiBannerText}>AI estimates are approximate. Review before saving.</Text>
         </View>
 
@@ -426,15 +472,15 @@ export default function NutritionScreen() {
           {calorieTarget ? (
             <>
               <View style={styles.summaryRow}>
-                <View>
+                <View style={styles.summaryColumn}>
                   <Text style={styles.summaryLabel}>Estimated daily target</Text>
                   <Text style={styles.summaryValue}>~{calorieTarget.toLocaleString()} kcal</Text>
                 </View>
-                <View>
+                <View style={styles.summaryColumn}>
                   <Text style={styles.summaryLabel}>Logged today</Text>
                   <Text style={styles.summaryValue}>~{totalCaloriesToday.toLocaleString()} kcal</Text>
                 </View>
-                <View>
+                <View style={styles.summaryColumn}>
                   <Text style={styles.summaryLabel}>{isOverTarget ? 'Over by' : 'Remaining'}</Text>
                   <Text style={[styles.summaryValue, isOverTarget && styles.summaryValueOver]}>
                     ~{Math.abs(remainingCalories).toLocaleString()} kcal
@@ -469,6 +515,7 @@ export default function NutritionScreen() {
           value={description}
           onChangeText={handleDescriptionChange}
           placeholder="What did you eat?"
+          maxLength={500} // same limit the backend enforces (routes/analyzeMealText.js)
         />
 
         {/* "Estimate with AI" for a typed meal. Hidden while a photo is
@@ -477,7 +524,7 @@ export default function NutritionScreen() {
         {!photoUri && (
           <View style={styles.textEstimateWrapper}>
             <Text style={styles.hintText}>Include portion size for a better estimate.</Text>
-            <Pressable
+            <PressableScale
               style={[
                 styles.analyzeButton,
                 (!description.trim() || analysisStatus === 'loading') && styles.buttonDisabled,
@@ -486,14 +533,14 @@ export default function NutritionScreen() {
               disabled={!description.trim() || analysisStatus === 'loading'}
             >
               {analysisStatus === 'loading' ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={colors.textOnColor} />
               ) : (
                 <Text style={styles.analyzeButtonText}>
-                  {/* this line is used to display the text on the button that triggers the AI estimation */}
+                  {/* After one estimate, the same button offers to estimate again. */}
                   {analysisStatus === 'done' ? 'Estimate again' : 'Estimate with AI'}
                 </Text>
               )}
-            </Pressable>
+            </PressableScale>
 
             {analysisStatus === 'error' && (
               <Text style={styles.errorText}>
@@ -504,6 +551,12 @@ export default function NutritionScreen() {
             {analysisStatus === 'not_food' && (
               <Text style={styles.errorText}>
                 This doesn't look like a meal description. Describe what you ate and try again.
+              </Text>
+            )}
+
+            {estimateOutdated && (
+              <Text style={styles.hintText}>
+                Description changed - estimate again, or check the numbers below yourself.
               </Text>
             )}
           </View>
@@ -526,12 +579,14 @@ export default function NutritionScreen() {
         />
 
         <View style={styles.photoButtonRow}>
-          <Pressable style={styles.photoButton} onPress={handleTakePhoto}>
+          <PressableScale style={styles.photoButton} onPress={handleTakePhoto}>
+            <Ionicons name="camera-outline" size={18} color={colors.primaryDark} />
             <Text style={styles.photoButtonText}>Take Photo</Text>
-          </Pressable>
-          <Pressable style={styles.photoButton} onPress={handleChooseFromLibrary}>
-            <Text style={styles.photoButtonText}>Choose from Library</Text>
-          </Pressable>
+          </PressableScale>
+          <PressableScale style={styles.photoButton} onPress={handleChooseFromLibrary}>
+            <Ionicons name="images-outline" size={18} color={colors.primaryDark} />
+            <Text style={styles.photoButtonText}>Library</Text>
+          </PressableScale>
         </View>
 
         {/* Photo preview + "Analyze with AI" only shows once a photo exists.
@@ -540,18 +595,18 @@ export default function NutritionScreen() {
         {photoUri ? (
           <View style={styles.previewWrapper}>
             <Image source={{ uri: photoUri }} style={styles.previewImage} />
-            <Pressable onPress={handleRemovePhoto}>
+            <PressableScale onPress={handleRemovePhoto}>
               <Text style={styles.removePhotoText}>Remove photo</Text>
-            </Pressable>
+            </PressableScale>
 
             {analysisStatus !== 'done' && (
-              <Pressable style={styles.analyzeButton} onPress={handleAnalyzeWithAI} disabled={analysisStatus === 'loading'}>
+              <PressableScale style={styles.analyzeButton} onPress={handleAnalyzeWithAI} disabled={analysisStatus === 'loading'}>
                 {analysisStatus === 'loading' ? (
-                  <ActivityIndicator color="#fff" />
+                  <ActivityIndicator color={colors.textOnColor} />
                 ) : (
                   <Text style={styles.analyzeButtonText}>Analyze with AI</Text>
                 )}
-              </Pressable>
+              </PressableScale>
             )}
 
             {analysisStatus === 'error' && (
@@ -592,13 +647,14 @@ export default function NutritionScreen() {
 
         {saveError ? <Text style={styles.saveErrorText}>{saveError}</Text> : null}
 
-        <Pressable
+        <PressableScale
           style={[styles.addButton, isSaving && styles.buttonDisabled]}
           onPress={handleAddMeal}
           disabled={isSaving}
         >
+          {!isSaving && <Ionicons name="add-circle" size={20} color={colors.textOnColor} />}
           <Text style={styles.addButtonText}>{isSaving ? 'Saving…' : 'Add Meal'}</Text>
-        </Pressable>
+        </PressableScale>
 
         <Text style={styles.sectionTitle}>Today's Meals</Text>
 
@@ -619,189 +675,3 @@ export default function NutritionScreen() {
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#fff',
-  },
-  container: {
-    padding: 20,
-  },
-  summaryCard: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 16,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: '#666',
-  },
-  summaryValue: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: '#2f8f5b',
-    marginTop: 2,
-  },
-  summaryValueOver: {
-    color: '#c0392b',
-  },
-  summarySubtext: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 4,
-  },
-  disclaimerText: {
-    fontSize: 11,
-    color: '#999',
-    marginTop: 16,
-    lineHeight: 16,
-  },
-  reviewCalories: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#3a6ea5',
-    marginBottom: 8,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
-    fontSize: 16,
-  },
-  photoButtonRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
-  photoButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#2f8f5b',
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  photoButtonText: {
-    color: '#2f8f5b',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  previewWrapper: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  previewImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 8,
-    marginBottom: 6,
-  },
-  removePhotoText: {
-    color: '#c0392b',
-    fontSize: 13,
-  },
-  analyzeButton: {
-    backgroundColor: '#3a6ea5',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    marginTop: 10,
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  textEstimateWrapper: {
-    alignItems: 'center',
-    marginTop: -4,
-    marginBottom: 14,
-  },
-  hintText: {
-    fontSize: 12,
-    color: '#888',
-  },
-  aiBanner: {
-    backgroundColor: '#fff8e1',
-    borderWidth: 1,
-    borderColor: '#f0d58a',
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginBottom: 12,
-  },
-  aiBannerText: {
-    fontSize: 13,
-    color: '#7a5b00',
-  },
-  saveErrorText: {
-    color: '#c0392b',
-    fontSize: 13,
-    marginBottom: 8,
-  },
-  analyzeButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  errorText: {
-    color: '#c0392b',
-    fontSize: 13,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  reviewBox: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 16,
-  },
-  reviewTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 6,
-  },
-  reviewObservation: {
-    fontSize: 13,
-    color: '#666',
-    fontStyle: 'italic',
-    marginBottom: 8,
-  },
-  addButton: {
-    backgroundColor: '#2f8f5b',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  addButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  emptyText: {
-    color: '#888',
-    fontStyle: 'italic',
-    marginTop: 8,
-  },
-});

@@ -1,5 +1,9 @@
 /**
- * Reads and saves daily step totals.
+ * stepsRepository.js
+ *
+ * Purpose: Reads and saves the daily step totals (table steps_daily, one row per day).
+ * Related to: stepService.js saves the 7-day sync here; MovementScreen.js,
+ * ProgressScreen.js and wellnessContextBuilder.js read from it.
  */
 
 import { getDb } from '../db';

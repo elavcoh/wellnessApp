@@ -7,7 +7,8 @@
  * Related to: used by ProgressScreen.js (steps, meals, breathing charts).
  */
 
-import { StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { barRowStyles as styles } from '../styles/components.styles';
 
 // Props:
 //   label     - short text on the left, e.g. a weekday like "Mon"
@@ -38,34 +39,3 @@ export default function BarRow({ label, value, maxValue, valueLabel, noData }) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  label: {
-    width: 36,
-    fontSize: 12,
-    color: '#666',
-  },
-  track: {
-    flex: 1,
-    height: 14,
-    backgroundColor: '#eee',
-    borderRadius: 4,
-    overflow: 'hidden',
-    marginHorizontal: 8,
-  },
-  fill: {
-    height: '100%',
-    backgroundColor: '#2f8f5b',
-  },
-  value: {
-    width: 60,
-    fontSize: 12,
-    color: '#333',
-    textAlign: 'right',
-  },
-});

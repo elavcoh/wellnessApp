@@ -1,59 +1,46 @@
 /**
  * aiService.js
  *
- * Calls the local backend for AI features.
+ * Purpose: The app's only connection to the backend's AI features: meal photo
+ * analysis, typed meal estimate, and the AI Coach.
+ * Related to: NutritionScreen.js, AICoachScreen.js and ProfileSetupScreen.js call it;
+ * backend/routes/ answers it.
  */
 
 import { File } from 'expo-file-system';
 
 import { API_BASE_URL } from '../constants/apiConfig';
 
-// Sends a meal photo to the backend and returns the parsed AI result.
-export async function analyzeMealPhoto(photoUri, mimeType) {
-  const file = new File(photoUri);
-  const imageBase64 = await file.base64();
-
-  const response = await fetch(`${API_BASE_URL}/api/analyze-meal`, {
+// Sends one JSON request to the backend and returns the JSON answer.
+// Throws if the backend answers with an error, so each screen can show its
+// own "couldn't reach..." message.
+async function postToBackend(path, body) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imageBase64, mimeType: mimeType ?? 'image/jpeg' }),
+    body: JSON.stringify(body),
   });
-
   if (!response.ok) {
-    throw new Error('Meal analysis request failed');
+    throw new Error(`Backend request to ${path} failed (${response.status})`);
   }
-
   return response.json();
+}
+
+// Sends a meal photo to the backend and returns the parsed AI result.
+// The photo is read from the phone as base64 text so it can travel as JSON.
+export async function analyzeMealPhoto(photoUri, mimeType) {
+  const imageBase64 = await new File(photoUri).base64();
+  return postToBackend('/api/analyze-meal', { imageBase64, mimeType: mimeType ?? 'image/jpeg' });
 }
 
 // Sends a typed meal description to the backend and returns the parsed AI
 // result - same shape as analyzeMealPhoto(), so the Nutrition screen can
 // handle both the same way.
-export async function analyzeMealText(description) {
-  const response = await fetch(`${API_BASE_URL}/api/analyze-meal-text`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ description }),
-  });
-
-  if (!response.ok) {
-    throw new Error('Meal text analysis request failed');
-  }
-
-  return response.json();
+export function analyzeMealText(description) {
+  return postToBackend('/api/analyze-meal-text', { description });
 }
 
 // Sends a user question plus today's wellness data to the AI coach.
-export async function getWellnessAdvice(question, context) {
-  const response = await fetch(`${API_BASE_URL}/api/wellness-advice`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question, context }),
-  });
-
-  if (!response.ok) {
-    throw new Error('Wellness advice request failed');
-  }
-
-  return response.json();
+export function getWellnessAdvice(question, context) {
+  return postToBackend('/api/wellness-advice', { question, context });
 }

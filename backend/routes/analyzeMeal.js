@@ -6,6 +6,7 @@
  * Related to: called by src/services/aiService.js on the phone.
  */
 
+// Express is the web framework that turns HTTP requests into function calls.
 const express = require('express');
 const { analyzeMealImage } = require('../services/openaiClient');
 
@@ -24,7 +25,10 @@ router.post('/', async (req, res) => {
   // server.js, which is what makes this destructuring possible.
   const { imageBase64, mimeType } = req.body;
 
-  if (!imageBase64) {
+  // Must be a non-empty string. The type check matters: a number here would
+  // make imageBase64.startsWith() below throw, and Express 4 doesn't catch
+  // errors thrown inside async routes - the whole server would crash.
+  if (typeof imageBase64 !== 'string' || !imageBase64) {
     // 400 = "Bad Request" - the client (the phone app) sent something
     // invalid, so we stop here instead of calling OpenAI with nothing.
     return res.status(400).json({ error: 'imageBase64 is required' });

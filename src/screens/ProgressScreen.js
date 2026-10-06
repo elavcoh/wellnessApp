@@ -1,15 +1,16 @@
-import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-
 /**
  * ProgressScreen.js
  *
- * Purpose: Shows simple 7-day trends for steps, meals, workouts and
- * breathing, built entirely from existing SQLite data (read-only - this
- * screen never writes anything).
- * Related to: one of the 6 main tabs.
+ * Purpose: Simple 7-day charts for steps, meals, workouts and breathing. Read-only -
+ * this screen never writes anything.
+ * Related to: AppTabs.js. Reads from the repositories. Styles in
+ * styles/ProgressScreen.styles.js.
  */
+
+import { useCallback, useState } from 'react';
+import { ScrollView, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 
 import BarRow from '../components/BarRow';
 import { getRecentSteps } from '../database/repositories/stepsRepository';
@@ -17,6 +18,8 @@ import { getMealCountsByDate } from '../database/repositories/mealsRepository';
 import { getRecentWorkouts } from '../database/repositories/workoutsRepository';
 import { getBreathingCountsByDate } from '../database/repositories/breathingRepository';
 import { getLastNDateStrings, getWeekdayLabel } from '../utils/dateUtils';
+import { colors } from '../styles/theme';
+import styles from '../styles/ProgressScreen.styles';
 
 // This screen is effectively a mini dashboard for the last 7 days. It does not
 // calculate anything new or make any recommendations; it only reads the existing
@@ -24,6 +27,7 @@ import { getLastNDateStrings, getWeekdayLabel } from '../utils/dateUtils';
 // so the user can quickly see patterns in steps, meals, workouts, and breathing.
 const DAYS = 7;
 
+// One "series" per chart: 7 entries (one per day), oldest first.
 export default function ProgressScreen() {
   const [stepsSeries, setStepsSeries] = useState([]);
   const [mealsSeries, setMealsSeries] = useState([]);
@@ -51,41 +55,27 @@ export default function ProgressScreen() {
     // steps were only recorded on 3 of the last 7 days). Turning each list
     // into a {date: value} lookup object makes it easy to ask "what was the
     // value on this specific date, if any?" in the .map() calls below.
-    const stepsByDate = Object.fromEntries(stepsRows.map((row) => [row.date, row.step_count]));
-    const mealsByDate = Object.fromEntries(mealRows.map((row) => [row.date, row.count]));
-    const workoutsByDate = Object.fromEntries(workoutRows.map((row) => [row.date, row]));
-    const breathingByDate = Object.fromEntries(breathingRows.map((row) => [row.date, row.count]));
+    const byDate = (rows, getValue) => Object.fromEntries(rows.map((row) => [row.date, getValue(row)]));
+    const stepsByDate = byDate(stepsRows, (row) => row.step_count);
+    const mealsByDate = byDate(mealRows, (row) => row.count);
+    const workoutsByDate = byDate(workoutRows, (row) => row);
+    const breathingByDate = byDate(breathingRows, (row) => row.count);
 
-    setStepsSeries(
-      dates.map((date) => ({
-        date,
-        label: getWeekdayLabel(date),
-        // null = no data recorded that day, distinct from a confirmed 0
-        steps: date in stepsByDate ? stepsByDate[date] : null,
-      }))
-    );
-    setMealsSeries(
-      dates.map((date) => ({
-        date,
-        label: getWeekdayLabel(date),
-        count: mealsByDate[date] ?? 0,
-      }))
-    );
+    // One entry per day of the week for a chart: the date, its short
+    // weekday label ("Tue") and whatever values that chart needs.
+    const perDay = (getValues) =>
+      dates.map((date) => ({ date, label: getWeekdayLabel(date), ...getValues(date) }));
+
+    // null = no data recorded that day, different from a measured 0.
+    setStepsSeries(perDay((date) => ({ steps: date in stepsByDate ? stepsByDate[date] : null })));
+    setMealsSeries(perDay((date) => ({ count: mealsByDate[date] ?? 0 })));
     setWorkoutsSeries(
-      dates.map((date) => ({
-        date,
-        label: getWeekdayLabel(date),
+      perDay((date) => ({
         completed: workoutsByDate[date]?.status === 'completed',
         hasWorkout: Boolean(workoutsByDate[date]),
       }))
     );
-    setBreathingSeries(
-      dates.map((date) => ({
-        date,
-        label: getWeekdayLabel(date),
-        count: breathingByDate[date] ?? 0,
-      }))
-    );
+    setBreathingSeries(perDay((date) => ({ count: breathingByDate[date] ?? 0 })));
     setLoaded(true);
   }, []);
 
@@ -127,8 +117,8 @@ export default function ProgressScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Progress</Text>
       <Text style={styles.subtitle}>This Week</Text>
+      <Text style={styles.title}>Progress</Text>
 
       {!hasAnyData && (
         <Text style={styles.emptyText}>
@@ -138,7 +128,10 @@ export default function ProgressScreen() {
       )}
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Steps</Text>
+        <View style={styles.cardHeader}>
+          <Ionicons name="walk" size={18} color={colors.primary} />
+          <Text style={styles.cardTitle}>Steps</Text>
+        </View>
         <Text style={styles.cardSubtitle}>
           {averageSteps !== null ? `Average: ${averageSteps.toLocaleString()}` : 'No step data yet'}
         </Text>
@@ -155,7 +148,10 @@ export default function ProgressScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Meals Logged</Text>
+        <View style={styles.cardHeader}>
+          <Ionicons name="nutrition" size={18} color={colors.accent} />
+          <Text style={styles.cardTitle}>Meals Logged</Text>
+        </View>
         {mealsSeries.map((day) => (
           <BarRow
             key={day.date}
@@ -168,7 +164,10 @@ export default function ProgressScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Workouts</Text>
+        <View style={styles.cardHeader}>
+          <Ionicons name="barbell" size={18} color={colors.accent} />
+          <Text style={styles.cardTitle}>Workouts</Text>
+        </View>
         <Text style={styles.cardSubtitle}>{workoutsCompletedCount} completed this week</Text>
         <View style={styles.dotsRow}>
           {workoutsSeries.map((day) => (
@@ -187,7 +186,10 @@ export default function ProgressScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Breathing</Text>
+        <View style={styles.cardHeader}>
+          <Ionicons name="leaf" size={18} color={colors.calm} />
+          <Text style={styles.cardTitle}>Breathing</Text>
+        </View>
         <Text style={styles.cardSubtitle}>{totalBreathingSessions} sessions this week</Text>
         {breathingSeries.map((day) => (
           <BarRow
@@ -202,70 +204,3 @@ export default function ProgressScreen() {
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: '#fff',
-    padding: 20,
-    paddingBottom: 40,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
-  },
-  emptyText: {
-    color: '#666',
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 20,
-  },
-  card: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    padding: 16,
-    marginBottom: 16,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  cardSubtitle: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 10,
-  },
-  dotsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  dotColumn: {
-    alignItems: 'center',
-  },
-  dot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 2,
-    borderColor: '#ccc',
-    marginBottom: 4,
-  },
-  dotCompleted: {
-    backgroundColor: '#2f8f5b',
-    borderColor: '#2f8f5b',
-  },
-  dotEmpty: {
-    borderColor: '#eee',
-  },
-  dotLabel: {
-    fontSize: 11,
-    color: '#666',
-  },
-});

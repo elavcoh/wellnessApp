@@ -6,6 +6,7 @@
  * Related to: called by src/services/aiService.js on the phone.
  */
 
+// Express is the web framework that turns HTTP requests into function calls.
 const express = require('express');
 const { getWellnessAdvice } = require('../services/openaiClient');
 
@@ -13,14 +14,23 @@ const { getWellnessAdvice } = require('../services/openaiClient');
 // routes/analyzeMeal.js.
 const router = express.Router();
 
+const MAX_QUESTION_LENGTH = 1000;
+
+// Checks the question and context, asks OpenAI, and returns the coach's
+// structured answer (or a short error).
 router.post('/', async (req, res) => {
   // question: plain text typed or tapped by the user.
   // context: the whole object built by wellnessContextBuilder.js on the
   // phone (profile, today's meals/steps/workout/breathing, targets).
   const { question, context } = req.body;
 
-  if (!question || !context) {
+  if (typeof question !== 'string' || !question.trim() || typeof context !== 'object' || !context) {
     return res.status(400).json({ error: 'question and context are required' });
+  }
+  // Same idea as the meal description limit - stops someone pasting a huge
+  // text and spending OpenAI credit on it.
+  if (question.length > MAX_QUESTION_LENGTH) {
+    return res.status(400).json({ error: 'question is too long' });
   }
 
   try {

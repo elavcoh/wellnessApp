@@ -1,9 +1,14 @@
 /**
- * Reads and saves completed breathing sessions.
+ * breathingRepository.js
+ *
+ * Purpose: Saves finished breathing sessions and counts them per day (table
+ * breathing_sessions).
+ * Related to: BreathingScreen.js saves sessions; HomeScreen.js, ProgressScreen.js and
+ * wellnessContextBuilder.js read them.
  */
 
 import { getDb } from '../db';
-import { toLocalDateString } from '../../utils/dateUtils';
+import { startOfLocalDay, toLocalDateString } from '../../utils/dateUtils';
 
 // Only called when a session finishes naturally - canceling never writes a
 // row, so this table always means "sessions actually completed."
@@ -20,8 +25,7 @@ export async function saveCompletedSession({ sessionType, level, durationSeconds
 // Returns all sessions completed since local midnight today.
 export async function getTodayCompletedSessions() {
   const db = await getDb();
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
+  const startOfToday = startOfLocalDay(0);
 
   return db.getAllAsync(
     'SELECT * FROM breathing_sessions WHERE completed_at >= ? ORDER BY completed_at DESC;',
@@ -37,15 +41,14 @@ export async function getTodayCompletedSessions() {
 // sessions from the last N local days and group them by LOCAL day here in JS.
 export async function getBreathingCountsByDate(days) {
   const db = await getDb();
-  const startOfRange = new Date();
-  startOfRange.setDate(startOfRange.getDate() - (days - 1));
-  startOfRange.setHours(0, 0, 0, 0); // local midnight, N-1 days ago
+  const startOfRange = startOfLocalDay(days - 1); // local midnight, N-1 days ago
 
   const rows = await db.getAllAsync(
     'SELECT completed_at FROM breathing_sessions WHERE completed_at >= ?;',
     [startOfRange.toISOString()]
   );
 
+  // { "2026-10-06": 2, ... } - one counter per local day.
   const countsByDate = {};
   for (const row of rows) {
     const date = toLocalDateString(new Date(row.completed_at));

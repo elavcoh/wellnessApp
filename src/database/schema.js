@@ -1,5 +1,10 @@
 /**
- * Creates the local SQLite tables used by the app.
+ * schema.js
+ *
+ * Purpose: Creates the SQLite tables the app needs and adds columns that newer app
+ * versions introduced, so old installs keep working.
+ * Related to: RootNavigator.js calls initDatabase() once at startup, before any screen
+ * reads data.
  */
 
 import { getDb } from './db';

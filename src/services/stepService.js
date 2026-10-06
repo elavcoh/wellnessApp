@@ -1,12 +1,17 @@
 /**
- * Reads the phone's step counts (today + the last 7 days) and saves them.
+ * stepService.js
+ *
+ * Purpose: Reads step counts from the iPhone's step counter (Core Motion) for today
+ * and the last 6 days, and saves them to SQLite.
+ * Related to: HomeScreen.js and MovementScreen.js call syncRecentSteps(); results are
+ * saved through stepsRepository.js.
  */
 
 import { Pedometer } from 'expo-sensors';
 
 import { getProfile } from '../database/repositories/userProfileRepository';
 import { getRecentSteps, saveDailySteps } from '../database/repositories/stepsRepository';
-import { toLocalDateString } from '../utils/dateUtils';
+import { startOfLocalDay, toLocalDateString } from '../utils/dateUtils';
 
 // iOS Core Motion keeps only the last 7 days of step data (today + 6 past
 // days), so that's as far back as we can ever fill in.
@@ -29,6 +34,7 @@ export function syncRecentSteps() {
   return syncInFlight;
 }
 
+// The real work behind syncRecentSteps() - see the steps inside.
 async function runSync() {
   // isAvailableAsync checks whether this DEVICE has step-counting hardware
   // at all - the iOS Simulator does not, so this is false there, even
@@ -62,10 +68,8 @@ async function runSync() {
   // Walk the 7 days from oldest (6 days ago) to newest (today), so today
   // ends up last in daysToFetch.
   for (let daysAgo = HISTORY_DAYS - 1; daysAgo >= 0; daysAgo--) {
-    // Local midnight at the start of this day (setHours uses the phone's time zone).
-    const start = new Date();
-    start.setDate(start.getDate() - daysAgo);
-    start.setHours(0, 0, 0, 0);
+    // Local midnight at the start of this day.
+    const start = startOfLocalDay(daysAgo);
     // End = next local midnight, or "right now" for today.
     const end = new Date(start);
     end.setDate(end.getDate() + 1);

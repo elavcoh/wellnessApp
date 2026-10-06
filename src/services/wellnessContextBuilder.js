@@ -1,5 +1,9 @@
 /**
- * Builds the JSON used for AI coach questions.
+ * wellnessContextBuilder.js
+ *
+ * Purpose: Collects today's data (profile, meals, steps, workout, breathing) into one
+ * JSON object that is sent to the AI Coach with every question.
+ * Related to: AICoachScreen.js. Reads from all repositories and nutritionTargets.js.
  */
 
 import { getProfile } from '../database/repositories/userProfileRepository';
@@ -8,7 +12,7 @@ import { getStepsForDate } from '../database/repositories/stepsRepository';
 import { getWorkoutForDate } from '../database/repositories/workoutsRepository';
 import { getTodayCompletedSessions } from '../database/repositories/breathingRepository';
 import { getTodayDateString } from '../utils/dateUtils';
-import { calculateCalorieTarget, calculateProteinTarget } from './nutritionTargets';
+import { calculateCalorieTarget, calculateProteinTarget, sumField } from './nutritionTargets';
 
 // Builds the full "today" context object from scratch, fresh every time it
 // is called - never cached, so the AI Coach always sees the latest data.
@@ -33,8 +37,8 @@ export async function buildTodayContext() {
   // the user sees on screen - never a different, AI-computed version.
   const calorieTarget = calculateCalorieTarget(profile);
   const proteinTarget = calculateProteinTarget(profile);
-  const caloriesLogged = meals.reduce((sum, meal) => sum + (meal.estimated_calories || 0), 0);
-  const proteinLogged = meals.reduce((sum, meal) => sum + (meal.estimated_protein_g || 0), 0);
+  const caloriesLogged = sumField(meals, 'estimated_calories');
+  const proteinLogged = sumField(meals, 'estimated_protein_g');
 
   return {
     // Only pick the fields the AI actually needs to reason about wellness -

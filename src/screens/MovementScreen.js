@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-
 /**
- * Movement and workout screen.
+ * MovementScreen.js
+ *
+ * Purpose: Shows today's steps and the last 7 days, and lets the user create
+ * today's workout and check off its exercises.
+ * Related to: AppTabs.js. Uses stepService.js, workoutsRepository.js,
+ * workoutTemplates.js. Styles in styles/MovementScreen.styles.js.
  */
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, AppState, ScrollView, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 
 import StepProgressBar from '../components/StepProgressBar';
 import ExerciseItem from '../components/ExerciseItem';
@@ -14,11 +20,15 @@ import {
   completeWorkout,
   createWorkout,
   getWorkoutForDate,
+  statusForExercises,
   updateExercises,
 } from '../database/repositories/workoutsRepository';
 import { getProfile } from '../database/repositories/userProfileRepository';
 import { selectWorkoutTemplate } from '../constants/workoutTemplates';
 import { getTodayDateString } from '../utils/dateUtils';
+import PressableScale from '../components/PressableScale';
+import { colors } from '../styles/theme';
+import styles from '../styles/MovementScreen.styles';
 
 // This screen is the app's daily movement dashboard. It combines three pieces
 // of data: the device's step count, the user's saved step goal, and a
@@ -41,6 +51,14 @@ export default function MovementScreen() {
 
   const [profile, setProfile] = useState(null); // needed for step goal + workout template choice
   const [workout, setWorkout] = useState(null); // today's workout, or null if none generated yet
+  // Always the latest workout, updated the moment it changes. Exercise taps
+  // build on this instead of `workout`, which only updates on the next
+  // render - otherwise two fast taps both start from the same old list and
+  // the second save undoes the first.
+  const workoutRef = useRef(null);
+  // Exercise saves run one after another in tap order, so an older list
+  // can never be written over a newer one.
+  const saveQueueRef = useRef(Promise.resolve());
   // Lock so a double-tap on "Generate Today's Workout" only creates one
   // workout (the database allows one per day and would reject the second).
   // A ref, not state, because it has to change before the next render.
@@ -79,11 +97,17 @@ export default function MovementScreen() {
     }
   }, []);
 
+  // Puts a workout on screen and keeps workoutRef in step with it.
+  const showWorkout = useCallback((nextWorkout) => {
+    workoutRef.current = nextWorkout;
+    setWorkout(nextWorkout);
+  }, []);
+
   // Reads today's workout from SQLite (or null if none exists yet).
   const loadWorkout = useCallback(async () => {
     const todaysWorkout = await getWorkoutForDate(getTodayDateString());
-    setWorkout(todaysWorkout);
-  }, []);
+    showWorkout(todaysWorkout);
+  }, [showWorkout]);
 
   // Refresh both steps and the workout every time this tab is opened.
   useFocusEffect(
@@ -116,20 +140,24 @@ export default function MovementScreen() {
       const date = getTodayDateString();
       const existing = await getWorkoutForDate(date);
       if (existing) {
-        setWorkout(existing);
+        showWorkout(existing);
         return;
       }
 
-      const template = selectWorkoutTemplate(profile);
+      // The profile normally loaded already (refreshSteps), but if Generate
+      // was tapped first, read it now - otherwise a Beginner would get the
+      // default (intermediate) plan.
+      const currentProfile = profile ?? (await getProfile());
+      const template = selectWorkoutTemplate(currentProfile);
       const exercises = template.exercises.map((exercise) => ({ ...exercise, completed: false }));
       const created = await createWorkout({
         date,
         workoutName: template.name,
-        location: profile?.training_location ?? 'Home',
-        goal: profile?.goal ?? null,
+        location: currentProfile?.training_location ?? 'Home',
+        goal: currentProfile?.goal ?? null,
         exercises,
       });
-      setWorkout(created);
+      showWorkout(created);
     } catch (error) {
       // Most likely today's workout was created some other way in the
       // meantime - just show whatever is saved now.
@@ -139,22 +167,29 @@ export default function MovementScreen() {
     }
   }
 
-  // Flips one exercise's completed flag on/off, saves the whole updated
-  // list (SQLite stores it as one JSON blob, not individual rows), then
-  // re-reads the workout so its derived status (see workoutsRepository.js)
-  // is up to date.
-  async function handleToggleExercise(index) {
-    const updatedExercises = workout.exercises.map((exercise, i) =>
+  // Flips one exercise's completed flag on/off. The screen updates right
+  // away (status worked out the same way the database does), then the whole
+  // list is saved (SQLite stores it as one JSON blob, not individual rows).
+  // If the save fails, re-read what's really saved.
+  function handleToggleExercise(index) {
+    const current = workoutRef.current;
+    if (!current) return;
+    const updatedExercises = current.exercises.map((exercise, i) =>
       i === index ? { ...exercise, completed: !exercise.completed } : exercise
     );
-    await updateExercises(workout.id, updatedExercises);
-    loadWorkout();
+    showWorkout({ ...current, exercises: updatedExercises, status: statusForExercises(updatedExercises) });
+    saveQueueRef.current = saveQueueRef.current
+      .then(() => updateExercises(current.id, updatedExercises))
+      .catch(() => loadWorkout());
   }
 
   // The "Mark Workout Complete" button - marks every exercise done at once,
   // even ones the user never individually checked.
   async function handleCompleteWorkout() {
-    await completeWorkout(workout.id, workout.exercises);
+    const current = workoutRef.current;
+    if (!current) return;
+    await saveQueueRef.current; // let any exercise taps finish saving first
+    await completeWorkout(current.id, current.exercises);
     loadWorkout();
   }
 
@@ -163,9 +198,12 @@ export default function MovementScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.overline}>Steps & workouts</Text>
       <Text style={styles.title}>Movement</Text>
 
-      {status === 'loading' && <ActivityIndicator size="large" style={styles.centerBlock} />}
+      {status === 'loading' && (
+        <ActivityIndicator size="large" color={colors.primary} style={styles.centerBlock} />
+      )}
 
       {status === 'unsupported' && (
         <Text style={styles.messageText}>
@@ -190,8 +228,11 @@ export default function MovementScreen() {
       {status === 'ok' && (
         <>
           <View style={styles.stepsCard}>
-            <Text style={styles.stepsCount}>{todaySteps.toLocaleString()}</Text>
+            <View style={styles.stepsIcon}>
+              <Ionicons name="footsteps" size={22} color={colors.primary} />
+            </View>
             <Text style={styles.stepsLabel}>Today's Steps</Text>
+            <Text style={styles.stepsCount}>{todaySteps.toLocaleString()}</Text>
 
             {stepGoal ? (
               <>
@@ -213,6 +254,7 @@ export default function MovementScreen() {
           )}
           {recentHistory.map((day) => (
             <View key={day.date} style={styles.historyRow}>
+              <View style={styles.historyDot} />
               <Text style={styles.historyDate}>{day.date}</Text>
               <Text style={styles.historySteps}>{day.step_count.toLocaleString()} steps</Text>
             </View>
@@ -227,10 +269,14 @@ export default function MovementScreen() {
 
       {!workout && (
         <View style={styles.workoutCard}>
+          <View style={styles.workoutIcon}>
+            <Ionicons name="barbell" size={22} color={colors.accent} />
+          </View>
           <Text style={styles.messageText}>No workout planned for today yet.</Text>
-          <Pressable style={styles.generateButton} onPress={handleGenerateWorkout}>
+          <PressableScale style={styles.generateButton} onPress={handleGenerateWorkout}>
+            <Ionicons name="sparkles" size={16} color={colors.textOnColor} />
             <Text style={styles.generateButtonText}>Generate Today's Workout</Text>
-          </Pressable>
+          </PressableScale>
         </View>
       )}
 
@@ -251,117 +297,18 @@ export default function MovementScreen() {
           ))}
 
           {workout.status === 'completed' ? (
-            <Text style={styles.workoutCompletedText}>Workout completed ✓</Text>
+            <View style={styles.workoutCompletedRow}>
+              <Ionicons name="trophy" size={18} color={colors.primary} />
+              <Text style={styles.workoutCompletedText}>Workout completed</Text>
+            </View>
           ) : (
-            <Pressable style={styles.generateButton} onPress={handleCompleteWorkout}>
+            <PressableScale style={styles.generateButton} onPress={handleCompleteWorkout}>
+              <Ionicons name="checkmark-done" size={18} color={colors.textOnColor} />
               <Text style={styles.generateButtonText}>Mark Workout Complete</Text>
-            </Pressable>
+            </PressableScale>
           )}
         </View>
       )}
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: '#fff',
-    padding: 20,
-    paddingBottom: 40,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
-  centerBlock: {
-    marginTop: 40,
-  },
-  messageText: {
-    color: '#666',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  stepsCard: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    padding: 16,
-    marginBottom: 24,
-    alignItems: 'center',
-  },
-  stepsCount: {
-    fontSize: 36,
-    fontWeight: 'bold',
-    color: '#2f8f5b',
-  },
-  stepsLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 12,
-  },
-  goalText: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 8,
-  },
-  historyRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  historyDate: {
-    fontSize: 14,
-    color: '#333',
-  },
-  historySteps: {
-    fontSize: 14,
-    color: '#666',
-  },
-  workoutsSectionTitle: {
-    marginTop: 8,
-  },
-  workoutCard: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    padding: 16,
-  },
-  workoutName: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  workoutMeta: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 8,
-  },
-  generateButton: {
-    backgroundColor: '#2f8f5b',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  generateButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  workoutCompletedText: {
-    color: '#2f8f5b',
-    fontWeight: '700',
-    fontSize: 15,
-    textAlign: 'center',
-    marginTop: 12,
-  },
-});

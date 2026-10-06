@@ -17,6 +17,8 @@
 // All hold phases are short (0-4 seconds) - safe, general wellness content,
 // not medical or extreme breath-holding.
 
+// Short, gentle sessions. pattern = seconds for each phase; hold 0 means
+// no hold (straight from inhale to exhale).
 export const BEGINNER_SESSIONS = [
   {
     id: 'calm-2min',
@@ -52,6 +54,7 @@ export const BEGINNER_SESSIONS = [
   },
 ];
 
+// Longer sessions with a real hold between inhale and exhale.
 export const ADVANCED_SESSIONS = [
   {
     id: 'focus-breathing',

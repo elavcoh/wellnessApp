@@ -1,5 +1,9 @@
 /**
- * Keeps meal photos in the app's own folder, so they don't disappear.
+ * photoStorage.js
+ *
+ * Purpose: Copies meal photos into the app's own folder so iOS can't delete them,
+ * and finds/deletes those copies later.
+ * Related to: NutritionScreen.js (save/delete) and MealListItem.js (show).
  */
 
 import { Directory, File, Paths } from 'expo-file-system';
@@ -17,9 +21,11 @@ const MEAL_PHOTOS_FOLDER = 'meal-photos';
 // would break a saved full address. resolveMealPhotoUri() turns it back
 // into a full address when the photo is shown.
 export async function saveMealPhoto(tempUri) {
+  // The app's own documents folder - iOS never clears it.
   const folder = new Directory(Paths.document, MEAL_PHOTOS_FOLDER);
   folder.create({ intermediates: true, idempotent: true }); // no-op if it already exists
 
+  // A unique name from the current time, keeping the original extension.
   const source = new File(tempUri);
   const fileName = `meal-${Date.now()}${source.extension || '.jpg'}`;
   await source.copy(new File(folder, fileName));

@@ -1,8 +1,9 @@
 /**
  * nutritionTargets.js
  *
- * Simple daily nutrition targets from the saved profile.
- * This is just math, not AI.
+ * Purpose: Simple math for daily calorie/protein targets from the profile, plus a
+ * small helper to add up meal values. No AI.
+ * Related to: NutritionScreen.js, ProfileSetupScreen.js and wellnessContextBuilder.js.
  */
 
 // Rough activity factor: more movement = higher calorie burn.
@@ -43,6 +44,13 @@ function hasRequiredFields(profile) {
       profile.activity_level &&
       profile.goal
   );
+}
+
+// Adds up one number field over a list - e.g. sumField(meals,
+// 'estimated_calories') for today's total, or the same over AI-detected
+// foods. Missing values count as 0.
+export function sumField(items, field) {
+  return items.reduce((sum, item) => sum + (item[field] || 0), 0);
 }
 
 // Main calorie target calculation. Uses the user's own custom target if

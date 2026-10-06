@@ -7,6 +7,7 @@
  * Related to: called by src/services/aiService.js on the phone.
  */
 
+// Express is the web framework that turns HTTP requests into function calls.
 const express = require('express');
 const { analyzeMealDescription } = require('../services/openaiClient');
 
@@ -18,6 +19,8 @@ const router = express.Router();
 // with olive oil..."), short enough to stop someone pasting an essay.
 const MAX_DESCRIPTION_LENGTH = 500;
 
+// Checks the typed description, sends it to OpenAI, and returns the
+// estimate - or a short error, never the internal error details.
 router.post('/', async (req, res) => {
   const { description } = req.body;
   const trimmed = typeof description === 'string' ? description.trim() : '';

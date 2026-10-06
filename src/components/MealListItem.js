@@ -6,9 +6,13 @@
  * Related to: used by NutritionScreen.js.
  */
 
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { resolveMealPhotoUri } from '../services/photoStorage';
+import PressableScale from './PressableScale';
+import { colors } from '../styles/theme';
+import { mealListItemStyles as styles } from '../styles/components.styles';
 
 // Props:
 //   meal     - one row straight from the meals SQLite table (see mealsRepository.js)
@@ -38,56 +42,9 @@ export default function MealListItem({ meal, onDelete }) {
         )}
       </View>
       <Text style={styles.time}>{meal.time}</Text>
-      <Pressable onPress={() => onDelete(meal.id)} style={styles.deleteButton}>
-        <Text style={styles.deleteText}>✕</Text>
-      </Pressable>
+      <PressableScale onPress={() => onDelete(meal.id)} style={styles.deleteButton}>
+        <Ionicons name="trash-outline" size={18} color={colors.textSoft} />
+      </PressableScale>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  thumbnail: {
-    width: 40,
-    height: 40,
-    borderRadius: 6,
-    marginRight: 10,
-  },
-  info: {
-    flex: 1,
-  },
-  mealType: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#2f8f5b',
-    textTransform: 'uppercase',
-  },
-  description: {
-    fontSize: 16,
-    marginTop: 2,
-  },
-  calories: {
-    fontSize: 12,
-    color: '#3a6ea5',
-    marginTop: 1,
-  },
-  time: {
-    fontSize: 14,
-    color: '#888',
-    marginRight: 12,
-  },
-  deleteButton: {
-    padding: 6,
-  },
-  deleteText: {
-    fontSize: 16,
-    color: '#c0392b',
-  },
-});

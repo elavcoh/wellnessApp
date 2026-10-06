@@ -1,5 +1,10 @@
 /**
- * Reads and saves the daily workout.
+ * workoutsRepository.js
+ *
+ * Purpose: Reads and saves the daily workout (table workouts, one per day). The
+ * exercise list is stored as JSON text.
+ * Related to: MovementScreen.js creates and updates it; HomeScreen.js, ProgressScreen.js
+ * and wellnessContextBuilder.js read it.
  */
 
 import { getDb } from '../db';
@@ -44,7 +49,8 @@ export async function createWorkout({ date, workoutName, location, goal, exercis
 
 // Works out the workout's status from its exercises: no boxes checked =
 // not_started, some checked = in_progress, all checked = completed.
-function statusForExercises(exercises) {
+// Also used by MovementScreen.js to update the screen before the save finishes.
+export function statusForExercises(exercises) {
   const allCompleted = exercises.every((e) => e.completed);
   if (allCompleted) return 'completed';
   const anyCompleted = exercises.some((e) => e.completed);

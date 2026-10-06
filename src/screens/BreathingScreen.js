@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-
 /**
- * Guided breathing screen.
+ * BreathingScreen.js
+ *
+ * Purpose: Guided breathing: a list of sessions, and a player with an animated
+ * circle that grows on inhale and shrinks on exhale.
+ * Related to: AppTabs.js. Sessions come from breathingPatterns.js, finished sessions are
+ * saved by breathingRepository.js. Styles in styles/BreathingScreen.styles.js.
  */
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, ScrollView, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 
 import SessionCard from '../components/SessionCard';
 import BreathingCircle from '../components/BreathingCircle';
@@ -13,6 +19,9 @@ import {
   getTodayCompletedSessions,
   saveCompletedSession,
 } from '../database/repositories/breathingRepository';
+import PressableScale from '../components/PressableScale';
+import { colors } from '../styles/theme';
+import styles from '../styles/BreathingScreen.styles';
 
 const CIRCLE_MIN_SCALE = 1;
 const CIRCLE_MAX_SCALE = 1.4;
@@ -31,6 +40,8 @@ function nextPhaseAfter(currentPhase, pattern) {
   return 'inhale';
 }
 
+// The screen shows either the session list or the player for the
+// session in activeSession.
 export default function BreathingScreen() {
   // activeSession: which session (from breathingPatterns.js) is currently
   // playing, or null when showing the list instead of the player.
@@ -53,10 +64,13 @@ export default function BreathingScreen() {
   // refs are always current (mutated directly, not through setState), so
   // `tick` reads the real numbers from the refs, then copies them into
   // state just so React re-renders the screen with the new values.
+  // The timer callback reads these refs instead of state: state values
+  // inside setInterval would be stuck at their old value.
   const phaseRef = useRef('inhale');
   const phaseSecondsLeftRef = useRef(0);
   const elapsedSecondsRef = useRef(0);
 
+  // Reads today's finished sessions for the status line above the list.
   const loadTodaySessions = useCallback(async () => {
     const sessions = await getTodayCompletedSessions();
     setTodaySessions(sessions);
@@ -78,20 +92,20 @@ export default function BreathingScreen() {
   // Starts (or continues) animating the circle toward the target size for
   // the given phase. "hold" does nothing - the circle just stays put.
   function animatePhase(nextPhase, seconds) {
-    if (nextPhase === 'inhale') {
-      Animated.timing(circleScale, {
-        toValue: CIRCLE_MAX_SCALE,
-        duration: seconds * 1000,
-        useNativeDriver: true,
-      }).start();
-    } else if (nextPhase === 'exhale') {
-      Animated.timing(circleScale, {
-        toValue: CIRCLE_MIN_SCALE,
-        duration: seconds * 1000,
-        useNativeDriver: true,
-      }).start();
-    }
-    // hold: leave the circle exactly where it is
+    if (nextPhase === 'hold') return; // hold: leave the circle exactly where it is
+    // Inhale grows the circle, exhale shrinks it, over the phase's seconds.
+    Animated.timing(circleScale, {
+      toValue: nextPhase === 'inhale' ? CIRCLE_MAX_SCALE : CIRCLE_MIN_SCALE,
+      duration: seconds * 1000,
+      useNativeDriver: true,
+    }).start();
+  }
+
+  // Stops the once-per-second timer and freezes the circle where it is.
+  // Used by pause, stop and when a session finishes.
+  function stopTimer() {
+    clearInterval(intervalRef.current);
+    circleScale.stopAnimation();
   }
 
   // Runs once per second while a session is active: counts down the
@@ -146,8 +160,7 @@ export default function BreathingScreen() {
   // Called only when a session completes naturally - this is the one
   // place a breathing session gets saved to SQLite.
   function finishSession(session) {
-    clearInterval(intervalRef.current);
-    circleScale.stopAnimation();
+    stopTimer();
 
     saveCompletedSession({
       sessionType: session.title,
@@ -168,8 +181,7 @@ export default function BreathingScreen() {
       animatePhase(phaseRef.current, phaseSecondsLeftRef.current);
       setIsPaused(false);
     } else {
-      clearInterval(intervalRef.current);
-      circleScale.stopAnimation();
+      stopTimer();
       setIsPaused(true);
     }
   }
@@ -177,27 +189,34 @@ export default function BreathingScreen() {
   // Stops the session without saving anything - only finishSession() (a
   // natural completion) ever writes to SQLite.
   function handleCancel() {
-    clearInterval(intervalRef.current);
-    circleScale.stopAnimation();
+    stopTimer();
     setActiveSession(null);
     setIsPaused(false);
   }
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Breathing</Text>
+      <Text style={styles.overline}>Guided breathing</Text>
+      <Text style={styles.title}>Breathe</Text>
 
       {/* Either the session list (below) or the player (further down) is
           shown - never both, switched by whether activeSession is set. */}
       {!activeSession && (
         <>
-          <Text style={styles.statusText}>
-            {todaySessions.length > 0
-              ? `Breathing completed today (${todaySessions.length} session${
-                  todaySessions.length > 1 ? 's' : ''
-                })`
-              : 'No breathing session completed today.'}
-          </Text>
+          <View style={[styles.statusPill, todaySessions.length > 0 && styles.statusPillDone]}>
+            <Ionicons
+              name={todaySessions.length > 0 ? 'checkmark-circle' : 'ellipse-outline'}
+              size={16}
+              color={todaySessions.length > 0 ? colors.primary : colors.textMuted}
+            />
+            <Text style={styles.statusText}>
+              {todaySessions.length > 0
+                ? `Breathing completed today (${todaySessions.length} session${
+                    todaySessions.length > 1 ? 's' : ''
+                  })`
+                : 'No breathing session completed today.'}
+            </Text>
+          </View>
 
           <Text style={styles.sectionTitle}>Beginner</Text>
           {BEGINNER_SESSIONS.map((session) => (
@@ -220,76 +239,22 @@ export default function BreathingScreen() {
 
           <BreathingCircle
             scale={circleScale}
+            phase={phase}
             phaseLabel={`${phase.charAt(0).toUpperCase() + phase.slice(1)} · ${phaseSecondsLeft}`}
           />
 
           <View style={styles.controlsRow}>
-            <Pressable style={styles.controlButton} onPress={handlePauseResume}>
+            <PressableScale style={styles.controlButton} onPress={handlePauseResume}>
+              <Ionicons name={isPaused ? 'play' : 'pause'} size={18} color={colors.textOnColor} />
               <Text style={styles.controlButtonText}>{isPaused ? 'Resume' : 'Pause'}</Text>
-            </Pressable>
-            <Pressable style={[styles.controlButton, styles.cancelButton]} onPress={handleCancel}>
-              <Text style={styles.controlButtonText}>Stop</Text>
-            </Pressable>
+            </PressableScale>
+            <PressableScale style={[styles.controlButton, styles.cancelButton]} onPress={handleCancel}>
+              <Ionicons name="stop" size={18} color={colors.text} />
+              <Text style={[styles.controlButtonText, styles.cancelButtonText]}>Stop</Text>
+            </PressableScale>
           </View>
         </View>
       )}
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: '#fff',
-    padding: 20,
-    paddingBottom: 40,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  statusText: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 8,
-    marginTop: 8,
-  },
-  player: {
-    alignItems: 'center',
-    paddingTop: 20,
-  },
-  playerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-  },
-  playerTime: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
-  controlsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 12,
-  },
-  controlButton: {
-    backgroundColor: '#2f8f5b',
-    paddingVertical: 12,
-    paddingHorizontal: 28,
-    borderRadius: 8,
-  },
-  cancelButton: {
-    backgroundColor: '#c0392b',
-  },
-  controlButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-});

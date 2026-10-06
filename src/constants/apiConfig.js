@@ -1,5 +1,10 @@
 /**
- * Backend URL config.
+ * apiConfig.js
+ *
+ * Purpose: Works out the address of the local backend server (Node/Express on the
+ * computer), so the phone knows where to send AI requests.
+ * Related to: aiService.js and backendService.js build every request URL from
+ * API_BASE_URL.
  */
 
 import Constants from 'expo-constants';

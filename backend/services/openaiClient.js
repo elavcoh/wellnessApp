@@ -199,6 +199,9 @@ If is_relevant is true, follow these rules:
 
 target_assessment: set this to "not_applicable" for almost every question. Only when the user's question is specifically asking you to evaluate a PROPOSED custom daily calorie or protein target they want to use instead of the app's calculated one (the question will describe the proposed number, the app's calculated number, and their reason), set target_assessment to "reasonable" if the proposed number is a sensible general value for their stated profile and goal, or "caution" if it looks too low, too high, poorly justified, or not explained - and explain your reasoning in the answer either way. Never give medical judgments here, only general-wellness reasonableness.`;
 
+// The exact shape the AI Coach's answer must have (strict mode enforces
+// it). The phone reads: answer, recommendations, missing_information and
+// target_assessment (used by the Profile screen's custom target check).
 const WELLNESS_ADVICE_SCHEMA = {
   type: 'object',
   properties: {

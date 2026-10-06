@@ -6,7 +6,8 @@
  * Related to: used by MovementScreen.js.
  */
 
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
+import { stepProgressBarStyles as styles } from '../styles/components.styles';
 
 // Props:
 //   progress - a number meant to be between 0 (empty) and 1 (full), e.g.
@@ -23,16 +24,3 @@ export default function StepProgressBar({ progress }) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  track: {
-    height: 12,
-    backgroundColor: '#eee',
-    borderRadius: 6,
-    overflow: 'hidden',
-  },
-  fill: {
-    height: '100%',
-    backgroundColor: '#2f8f5b',
-  },
-});

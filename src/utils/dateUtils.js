@@ -1,9 +1,9 @@
 /**
- * Date and time helpers.
+ * dateUtils.js
  *
- * Every calendar day in the app ("YYYY-MM-DD") uses the phone's local
- * clock, never UTC - so "today" always matches what the user sees on
- * their phone, even right after midnight.
+ * Purpose: Small date/time helpers. Every "day" in the app ("YYYY-MM-DD") uses the
+ * phone's local clock, never UTC, so "today" matches what the user sees.
+ * Related to: used by screens, repositories and stepService.js.
  */
 
 // Turns a Date into "YYYY-MM-DD" using the phone's local time zone.
@@ -13,6 +13,16 @@ export function toLocalDateString(date) {
   const month = String(date.getMonth() + 1).padStart(2, '0'); // getMonth() is 0-based
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+// Returns a Date set to local midnight, `daysAgo` days before today
+// (0 = the start of today, 1 = the start of yesterday, ...).
+// setHours/setDate use the phone's own time zone, so this is the user's day.
+export function startOfLocalDay(daysAgo = 0) {
+  const date = new Date();
+  date.setDate(date.getDate() - daysAgo);
+  date.setHours(0, 0, 0, 0);
+  return date;
 }
 
 // Returns today's local date as "YYYY-MM-DD".
@@ -32,10 +42,8 @@ export function getCurrentTimeString() {
 // last 7 local calendar days as ["2026-09-09", ..., "2026-09-15"].
 export function getLastNDateStrings(n) {
   const dates = [];
-  for (let i = n - 1; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    dates.push(toLocalDateString(d));
+  for (let daysAgo = n - 1; daysAgo >= 0; daysAgo--) {
+    dates.push(toLocalDateString(startOfLocalDay(daysAgo)));
   }
   return dates;
 }

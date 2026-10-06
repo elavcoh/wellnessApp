@@ -1,5 +1,9 @@
 /**
- * Reads and saves meals in SQLite.
+ * mealsRepository.js
+ *
+ * Purpose: Reads, saves and deletes logged meals (table meals).
+ * Related to: NutritionScreen.js adds/deletes meals; ProgressScreen.js and
+ * wellnessContextBuilder.js read them.
  */
 
 import { getDb } from '../db';

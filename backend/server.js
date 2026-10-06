@@ -30,6 +30,7 @@ const analyzeMealRoute = require('./routes/analyzeMeal');
 const analyzeMealTextRoute = require('./routes/analyzeMealText');
 const wellnessAdviceRoute = require('./routes/wellnessAdvice');
 
+// The server itself. Everything below adds behavior to it, in order.
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -56,6 +57,22 @@ app.get('/api/health', (req, res) => {
 app.use('/api/analyze-meal', analyzeMealRoute);
 app.use('/api/analyze-meal-text', analyzeMealTextRoute);
 app.use('/api/wellness-advice', wellnessAdviceRoute);
+
+// Any other path gets a short JSON 404 instead of Express's HTML page.
+app.use((req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
+// Error handler - Express sends any error from the steps above here (for
+// example a request body that isn't valid JSON). It must take 4 arguments
+// for Express to treat it as the error handler. Logs the real reason on the
+// Mac and sends the phone a short JSON message - without this, Express
+// replies with an HTML page that includes file paths from this computer.
+app.use((err, req, res, next) => {
+  console.error('Request failed:', err.message);
+  const status = err.status || 500;
+  res.status(status).json({ error: status < 500 ? 'Invalid request' : 'Server error' });
+});
 
 // Starts the server listening for real network connections on PORT (3000
 // by default). Nothing above this line actually starts serving requests -

@@ -1,29 +1,29 @@
+/**
+ * AICoachScreen.js
+ *
+ * Purpose: Ask the AI Coach wellness questions (suggested or typed). Today's data is
+ * sent with each question; off-topic questions get a fixed refusal.
+ * Related to: AppTabs.js. Uses wellnessContextBuilder.js and aiService.js. Styles in
+ * styles/AICoachScreen.styles.js.
+ */
+
 import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-
-/**
- * AICoachScreen.js
- *
- * Purpose: Lets the user ask wellness questions (suggested or typed) and
- * shows the AI's answer, recommendations, and any missing information.
- * The AI Coach only answers wellness questions - unrelated questions get a
- * fixed refusal message from the backend.
- * Related to: one of the 6 main tabs. Uses wellnessContextBuilder.js to
- * gather today's data before every question.
- */
 
 import RecommendationCard from '../components/RecommendationCard';
 import { buildTodayContext } from '../services/wellnessContextBuilder';
 import { getWellnessAdvice } from '../services/aiService';
+import PressableScale from '../components/PressableScale';
+import { colors } from '../styles/theme';
+import styles from '../styles/AICoachScreen.styles';
 
 // Buttons shown above the text input, so the user can tap instead of typing.
 // Tapping one just calls handleAsk with this exact text.
@@ -43,6 +43,9 @@ const WORKOUT_STATUS_TEXT = {
   completed: 'Completed',
 };
 
+// contextSummary: today's data, for the small summary box at the top.
+// status: 'idle' | 'loading' | 'done' | 'error' for the latest question.
+// result: the coach's last answer.
 export default function AICoachScreen() {
   // contextSummary: today's data (steps, meals, workout, breathing), shown
   // in the small summary box at the top. Refreshed every time the screen
@@ -123,7 +126,15 @@ export default function AICoachScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>AI Coach</Text>
+      <View style={styles.headerRow}>
+        <View style={styles.headerBadge}>
+          <Ionicons name="sparkles" size={22} color={colors.textOnColor} />
+        </View>
+        <View>
+          <Text style={styles.overline}>Your wellness coach</Text>
+          <Text style={styles.title}>AI Coach</Text>
+        </View>
+      </View>
       <Text style={styles.subtitle}>
         Recommendations below are based only on what you've actually logged in the app today.
       </Text>
@@ -132,49 +143,71 @@ export default function AICoachScreen() {
           contextSummary loads, so falls back to "No data yet" instead of
           showing 0 (which would wrongly look like a measured zero). */}
       <View style={styles.summaryBox}>
-        <Text style={styles.summaryLine}>
-          Steps:{' '}
-          {steps
-            ? `${steps.count.toLocaleString()} / ${steps.goal?.toLocaleString() ?? '—'}`
-            : 'No data yet'}
-        </Text>
-        <Text style={styles.summaryLine}>Meals logged: {mealsCount}</Text>
-        <Text style={styles.summaryLine}>
-          Workout: {workoutStatus ? WORKOUT_STATUS_TEXT[workoutStatus] : 'None planned'}
-        </Text>
-        <Text style={styles.summaryLine}>
-          Breathing: {breathingCount} session{breathingCount === 1 ? '' : 's'}
-        </Text>
+        <View style={styles.summaryItem}>
+          <Ionicons name="walk-outline" size={16} color={colors.primary} />
+          <Text style={styles.summaryLine}>
+            Steps:{' '}
+            {steps
+              ? `${steps.count.toLocaleString()} / ${steps.goal?.toLocaleString() ?? '—'}`
+              : 'No data yet'}
+          </Text>
+        </View>
+        <View style={styles.summaryItem}>
+          <Ionicons name="nutrition-outline" size={16} color={colors.accent} />
+          <Text style={styles.summaryLine}>Meals logged: {mealsCount}</Text>
+        </View>
+        <View style={styles.summaryItem}>
+          <Ionicons name="barbell-outline" size={16} color={colors.accent} />
+          <Text style={styles.summaryLine}>
+            Workout: {workoutStatus ? WORKOUT_STATUS_TEXT[workoutStatus] : 'None planned'}
+          </Text>
+        </View>
+        <View style={styles.summaryItem}>
+          <Ionicons name="leaf-outline" size={16} color={colors.calm} />
+          <Text style={styles.summaryLine}>
+            Breathing: {breathingCount} session{breathingCount === 1 ? '' : 's'}
+          </Text>
+        </View>
       </View>
 
       {/* One button per entry in SUGGESTED_QUESTIONS - tapping any of them
           just runs handleAsk with that exact question text. */}
       <Text style={styles.sectionTitle}>Suggested Questions</Text>
       {SUGGESTED_QUESTIONS.map((question) => (
-        <Pressable
+        <PressableScale
           key={question}
           style={styles.suggestionButton}
           onPress={() => handleAsk(question)}
         >
+          <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.calm} />
           <Text style={styles.suggestionText}>{question}</Text>
-        </Pressable>
+        </PressableScale>
       ))}
 
       {/* Free-text alternative to the suggested-question buttons above. */}
       <Text style={styles.sectionTitle}>Ask Your Own Question</Text>
-      <TextInput
-        style={styles.input}
-        value={customQuestion}
-        onChangeText={setCustomQuestion}
-        placeholder="Type a question..."
-      />
-      <Pressable style={styles.askButton} onPress={() => handleAsk(customQuestion)}>
-        <Text style={styles.askButtonText}>Ask</Text>
-      </Pressable>
+      <View style={styles.askRow}>
+        <TextInput
+          style={styles.input}
+          value={customQuestion}
+          onChangeText={setCustomQuestion}
+          placeholder="Type a question..."
+          placeholderTextColor={colors.textSoft}
+          maxLength={1000} // same limit the backend enforces (routes/wellnessAdvice.js)
+        />
+        <PressableScale style={styles.askButton} onPress={() => handleAsk(customQuestion)}>
+          <Ionicons name="arrow-up" size={20} color={colors.textOnColor} />
+        </PressableScale>
+      </View>
 
       {/* Below here: only one of these three blocks is ever visible at a
           time, controlled by the `status` state set in handleAsk. */}
-      {status === 'loading' && <ActivityIndicator size="large" style={styles.loading} />}
+      {status === 'loading' && (
+        <View style={styles.loading}>
+          <ActivityIndicator size="large" color={colors.calm} />
+          <Text style={styles.loadingText}>Thinking about your day...</Text>
+        </View>
+      )}
 
       {status === 'error' && (
         <Text style={styles.errorText}>
@@ -216,105 +249,3 @@ export default function AICoachScreen() {
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: '#fff',
-    padding: 20,
-    paddingBottom: 40,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 6,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 16,
-  },
-  summaryBox: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 20,
-  },
-  summaryLine: {
-    fontSize: 14,
-    color: '#333',
-    marginBottom: 4,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 8,
-    marginTop: 8,
-  },
-  suggestionButton: {
-    borderWidth: 1,
-    borderColor: '#2f8f5b',
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 8,
-  },
-  suggestionText: {
-    color: '#2f8f5b',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 12,
-    fontSize: 16,
-  },
-  askButton: {
-    backgroundColor: '#2f8f5b',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  askButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  loading: {
-    marginTop: 24,
-  },
-  errorText: {
-    color: '#c0392b',
-    fontSize: 14,
-    marginTop: 20,
-    textAlign: 'center',
-  },
-  resultBox: {
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 10,
-    padding: 16,
-  },
-  answerText: {
-    fontSize: 15,
-    lineHeight: 21,
-    marginBottom: 8,
-  },
-  resultSectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginTop: 8,
-    marginBottom: 6,
-  },
-  missingItem: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 4,
-  },
-});

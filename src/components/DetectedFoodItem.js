@@ -7,7 +7,11 @@
  * Related to: used by NutritionScreen.js's "review before saving" step.
  */
 
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import PressableScale from './PressableScale';
+import { colors } from '../styles/theme';
+import { detectedFoodItemStyles as styles } from '../styles/components.styles';
 
 // Props:
 //   food     - one item from the AI's "foods" array (name, portion_description,
@@ -32,43 +36,9 @@ export default function DetectedFoodItem({ food, onRemove }) {
           </Text>
         )}
       </View>
-      <Pressable onPress={onRemove} style={styles.removeButton}>
-        <Text style={styles.removeText}>✕</Text>
-      </Pressable>
+      <PressableScale onPress={onRemove} style={styles.removeButton}>
+        <Ionicons name="close" size={18} color={colors.textMuted} />
+      </PressableScale>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-  info: {
-    flex: 1,
-  },
-  name: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  detail: {
-    fontSize: 13,
-    color: '#777',
-    marginTop: 1,
-  },
-  calories: {
-    fontSize: 12,
-    color: '#3a6ea5',
-    marginTop: 2,
-  },
-  removeButton: {
-    padding: 6,
-  },
-  removeText: {
-    fontSize: 14,
-    color: '#c0392b',
-  },
-});

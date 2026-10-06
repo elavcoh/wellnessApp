@@ -1,5 +1,9 @@
 /**
- * Shared SQLite connection.
+ * db.js
+ *
+ * Purpose: Opens the app's single SQLite database file (wellness.db) once and shares
+ * that same connection with every repository.
+ * Related to: every file in database/repositories/ and schema.js calls getDb().
  */
 
 import * as SQLite from 'expo-sqlite';

@@ -1,5 +1,10 @@
 /**
- * Reads and saves the single profile row.
+ * userProfileRepository.js
+ *
+ * Purpose: Reads and saves the user's profile. The app has one local user, so the
+ * table only ever has one row.
+ * Related to: ProfileSetupScreen.js saves it; almost every screen reads it
+ * (targets, step goal, workout choice).
  */
 
 import { getDb } from '../db';
