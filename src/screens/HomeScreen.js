@@ -17,6 +17,7 @@ import { syncRecentSteps } from '../services/stepService';
 import { getWorkoutForDate } from '../database/repositories/workoutsRepository';
 import { getTodayCompletedSessions } from '../database/repositories/breathingRepository';
 import { getTodayDateString } from '../utils/dateUtils';
+import { deleteProfile } from '../database/repositories/userProfileRepository';
 import PressableScale from '../components/PressableScale';
 import { colors } from '../styles/theme';
 import styles from '../styles/HomeScreen.styles';
@@ -78,6 +79,14 @@ export default function HomeScreen({ navigation }) {
     setConnectionStatus(isConnected ? 'connected' : 'failed');
   }
 
+  // Developer button: removes the profile and restarts the app flow from
+  // the Welcome screen (other data is kept). navigation.reset replaces the
+  // whole screen history, so "back" can't return to the tabs.
+  async function handleResetProfile() {
+    await deleteProfile();
+    navigation.reset({ index: 0, routes: [{ name: 'Welcome' }] });
+  }
+
   // Display only: a warm greeting that matches the time of day.
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -137,6 +146,10 @@ export default function HomeScreen({ navigation }) {
         {connectionStatus === 'failed' && (
           <Text style={[styles.statusText, styles.statusFailed]}>Connection failed</Text>
         )}
+        <PressableScale style={[styles.testButton, styles.resetButton]} onPress={handleResetProfile}>
+          <Ionicons name="refresh-outline" size={16} color={colors.danger} />
+          <Text style={[styles.testButtonText, styles.resetButtonText]}>Reset Profile (show Welcome)</Text>
+        </PressableScale>
       </View>
     </ScrollView>
   );

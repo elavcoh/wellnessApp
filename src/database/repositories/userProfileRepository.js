@@ -75,3 +75,11 @@ export async function saveProfile(profile) {
     );
   }
 }
+
+// Deletes the profile (developer tool on Home). Meals, steps, workouts and
+// breathing sessions are kept - only the profile row is removed, so the app
+// shows the Welcome screen again.
+export async function deleteProfile() {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM user_profile;');
+}

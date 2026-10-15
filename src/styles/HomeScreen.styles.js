@@ -95,6 +95,8 @@ export default StyleSheet.create({
     borderRadius: radius.pill,
   },
   testButtonText: { color: colors.textMuted, fontWeight: '600', fontSize: 13 },
+  resetButton: { marginTop: spacing.md, backgroundColor: colors.dangerSoft },
+  resetButtonText: { color: colors.danger },
   statusText: { marginTop: spacing.sm, fontSize: 13, color: colors.textMuted },
   statusConnected: { color: colors.primary, fontWeight: '700' },
   statusFailed: { color: colors.danger, fontWeight: '700' },
